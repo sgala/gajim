@@ -36,6 +36,7 @@ import gtkgui_helpers
 import dialogs
 import vcard
 import cell_renderer_image
+import message_control
 
 try:
 	import gtkspell
@@ -92,6 +93,8 @@ class PreferencesWindow:
 		self.auto_xa_message_entry = self.xml.get_widget('auto_xa_message_entry')
 		self.trayicon_checkbutton = self.xml.get_widget('trayicon_checkbutton')
 		self.notebook = self.xml.get_widget('preferences_notebook')
+		self.one_window_type_combobox =\
+			self.xml.get_widget('one_window_type_combobox')
 
 		#trayicon
 		if gajim.interface.systray_capabilities:
@@ -153,6 +156,14 @@ class PreferencesWindow:
 			if gajim.config.get('iconset') == l[i]:
 				self.iconset_combobox.set_active(i)
 
+		# Set default for single window type
+		choices = common.config.opt_one_window_types
+		type = gajim.config.get('one_message_window')
+		if type in choices:
+			self.one_window_type_combobox.set_active(choices.index(type))
+		else:
+			self.one_window_type_combobox.set_active(0)
+
 		# Use transports iconsets
 		st = gajim.config.get('use_transports_iconsets')
 		self.xml.get_widget('transports_iconsets_checkbutton').set_active(st)
@@ -164,10 +175,6 @@ class PreferencesWindow:
 		theme_combobox.add_attribute(cell, 'text', 0)
 		model = gtk.ListStore(str)
 		theme_combobox.set_model(model)
-
-		#use tabbed chat window
-		st = gajim.config.get('usetabbedchat')
-		self.xml.get_widget('use_tabbed_chat_window_checkbutton').set_active(st)
 
 		#use speller
 		if os.name == 'nt':
@@ -474,13 +481,9 @@ class PreferencesWindow:
 	def on_show_status_msgs_in_roster_checkbutton_toggled(self, widget):
 		self.on_checkbutton_toggled(widget, 'show_status_msgs_in_roster')
 		gajim.interface.roster.draw_roster()
-		for account in gajim.connections:
-			gcs = gajim.interface.instances[account]['gc']
-			if gcs.has_key('tabbed'):
-				gcs['tabbed'].draw_all_roster()
-			else:
-				for room_jid in gcs:
-					gcs[room_jid].draw_all_roster()
+		for ctl in gajim.interface.msg_win_mgr.controls():
+			if ctl.type_id == message_control.TYPE_GC:
+				ctl.update_ui()
 
 	def on_show_avatars_in_roster_checkbutton_toggled(self, widget):
 		self.on_checkbutton_toggled(widget, 'show_avatars_in_roster')
@@ -495,14 +498,8 @@ class PreferencesWindow:
 
 	def toggle_emoticons(self):
 		'''Update emoticons state in Opened Chat Windows'''
-		for a in gajim.connections:
-			for kind in ('chats', 'gc'):
-				windows = gajim.interface.instances[a][kind]
-				if windows.has_key('tabbed'):
-					windows['tabbed'].toggle_emoticons()
-				else:
-					for jid in windows.keys():
-						windows[jid].toggle_emoticons()
+		for win in gajim.interface.msg_win_mgr.windows():
+			win.toggle_emoticons()
 
 	def on_add_remove_emoticons_button_clicked(self, widget):
 		if gajim.interface.instances.has_key('manage_emots'):
@@ -537,6 +534,7 @@ class PreferencesWindow:
 		gajim.interface.roster.change_roster_style(None)
 		gajim.interface.save_config()
 
+	# FIXME: Remove or implement for new window code
 	def merge_windows(self, kind):
 		for acct in gajim.connections:
 			# save buffers and close windows
@@ -563,6 +561,7 @@ class PreferencesWindow:
 				window.message_textviews[jid].set_buffer(buf2[jid])
 				window.load_var(jid, saved_var[jid])
 
+	# FIXME: Remove or implement for new window code
 	def split_windows(self, kind):
 		for acct in gajim.connections:
 			# save buffers and close tabbed chat windows
@@ -592,16 +591,12 @@ class PreferencesWindow:
 				window.message_textviews[jid].set_buffer(buf2[jid])
 				window.load_var(jid, saved_var[jid])
 
-	def on_use_tabbed_chat_window_checkbutton_toggled(self, widget):
-		self.on_checkbutton_toggled(widget, 'usetabbedchat')
-
-		if widget.get_active():
-			self.merge_windows('chats')
-			self.merge_windows('gc')
-		else:
-			self.split_windows('chats')
-			self.split_windows('gc')
+	def on_one_window_type_combo_changed(self, widget):
+		active = widget.get_active()
+		config_type = common.config.opt_one_window_types[active]
+		gajim.config.set('one_message_window', config_type)
 		gajim.interface.save_config()
+		# FIXME: Update current windows? Meh
 
 	def apply_speller(self, kind):
 		for acct in gajim.connections:
@@ -640,13 +635,8 @@ class PreferencesWindow:
 
 	def update_print_time(self):
 		'''Update time in Opened Chat Windows'''
-		for a in gajim.connections:
-			window = gajim.interface.instances[a]['chats']
-			if window.has_key('tabbed'):
-				window['tabbed'].update_print_time()
-			else:
-				for jid in window.keys():
-					window[jid].update_print_time()
+		for msg_win in gajim.interface.msg_win_mgr.windows():
+			msg_win.update_print_time()
 
 	def on_time_never_radiobutton_toggled(self, widget):
 		if widget.get_active():
@@ -684,25 +674,8 @@ class PreferencesWindow:
 
 	def update_text_tags(self):
 		'''Update color tags in Opened Chat Windows'''
-		for a in gajim.connections:
-			for kind in ('chats', 'gc'):
-				windows = gajim.interface.instances[a][kind]
-				if windows.has_key('tabbed'):
-					windows['tabbed'].update_tags()
-				else:
-					for jid in windows.keys():
-						windows[jid].update_tags()
-
-	def update_text_font(self):
-		'''Update text font in Opened Chat Windows'''
-		for a in gajim.connections:
-			for kind in ('chats', 'gc'):
-				windows = gajim.interface.instances[a][kind]
-				if windows.has_key('tabbed'):
-					windows['tabbed'].update_font()
-				else:
-					for jid in windows.keys():
-						windows[jid].update_font()
+		for win in gajim.interface.msg_win_mgr.windows():
+			win.update_tags()
 
 	def on_preference_widget_color_set(self, widget, text):
 		color = widget.get_color()
@@ -716,6 +689,11 @@ class PreferencesWindow:
 		gajim.config.set(text, font)
 		self.update_text_font()
 		gajim.interface.save_config()
+
+	def update_text_font(self):
+		'''Update text font in Opened Chat Windows'''
+		for win in gajim.interface.msg_win_mgr.windows():
+			win.update_font()
 
 	def on_incoming_msg_colorbutton_color_set(self, widget):
 		self.on_preference_widget_color_set(widget, 'inmsgcolor')

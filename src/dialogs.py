@@ -64,7 +64,7 @@ class EditGroupsDialog:
 		self.changes_made = False
 		self.list = self.xml.get_widget('groups_treeview')
 		self.xml.get_widget('nickname_label').set_markup(
-			_("Contact's name: <i>%s</i>") % user.name)
+			_("Contact's name: <i>%s</i>") % user.get_shown_name())
 		self.xml.get_widget('jid_label').set_markup(
 			_('JID: <i>%s</i>') % user.jid)
 		
@@ -842,10 +842,12 @@ class PopupNotificationWindow:
 		event_description_label = xml.get_widget('event_description_label')
 		eventbox = xml.get_widget('eventbox')
 		
-		event_type_label.set_markup('<span foreground="black" weight="bold">%s</span>' %event_type)
+		event_type_label.set_markup(
+			'<span foreground="black" weight="bold">%s</span>' % event_type)
 
 		if self.jid in gajim.contacts.get_jid_list(account):
-			txt = gajim.contacts.get_first_contact_from_jid(account, self.jid).name
+			txt = gajim.contacts.get_first_contact_from_jid(account,
+				self.jid).get_shown_name()
 		else:
 			txt = self.jid
 
@@ -856,12 +858,14 @@ class PopupNotificationWindow:
 			limegreen = gtk.gdk.color_parse('limegreen')
 			close_button.modify_bg(gtk.STATE_NORMAL, limegreen)
 			eventbox.modify_bg(gtk.STATE_NORMAL, limegreen)
-			event_description_label.set_markup('<span foreground="black">%s</span>' % txt)
+			event_description_label.set_markup(
+				'<span foreground="black">%s</span>' % txt)
 		elif event_type == _('Contact Signed Out'):
 			red = gtk.gdk.color_parse('red')
 			close_button.modify_bg(gtk.STATE_NORMAL, red)
 			eventbox.modify_bg(gtk.STATE_NORMAL, red)
-			event_description_label.set_markup('<span foreground="black">%s</span>' % txt)
+			event_description_label.set_markup(
+				'<span foreground="black">%s</span>' % txt)
 		elif event_type in (_('New Message'), _('New Single Message'),
 			_('New Private Message')):
 			dodgerblue = gtk.gdk.color_parse('dodgerblue')
@@ -895,7 +899,7 @@ class PopupNotificationWindow:
 					# get the name of the sender, as it is in the roster
 					sender = unicode(file_props['sender']).split('/')[0]
 					name = gajim.contacts.get_first_contact_from_jid(account,
-						sender).name
+						sender).get_shown_name()
 					txt = _('From %s') % name
 				else:
 					receiver = file_props['receiver']
@@ -904,7 +908,7 @@ class PopupNotificationWindow:
 					receiver = receiver.split('/')[0]
 					# get the name of the contact, as it is in the roster
 					name = gajim.contacts.get_first_contact_from_jid(account,
-						receiver).name
+						receiver).get_shown_name()
 					txt = _('To %s') % name
 			else:
 				txt = ''
@@ -979,22 +983,17 @@ class PopupNotificationWindow:
 					gajim.interface.roster.add_contact_to_roster(contact.jid,
 						self.account)
 
-		if self.msg_type == 'pm': # It's a private message
-			gajim.interface.roster.new_chat(contact, self.account)
-			chats_window = gajim.interface.instances[self.account]['chats'][self.jid]
-			chats_window.set_active_tab(self.jid)
-			chats_window.window.present()
-		elif self.msg_type in ('normal', 'file-request', 'file-request-error',
+		if self.msg_type in ('normal', 'file-request', 'file-request-error',
 			'file-send-error', 'file-error', 'file-stopped', 'file-completed'):
 			# Get the first single message event
 			ev = gajim.get_first_event(self.account, self.jid, self.msg_type)
 			gajim.interface.roster.open_event(self.account, self.jid, ev)
-
-		else: # 'chat'
+		else: # chat or pm
+			assert(self.msg_type == 'chat' or self.msg_type == 'pm')
 			gajim.interface.roster.new_chat(contact, self.account)
-			chats_window = gajim.interface.instances[self.account]['chats'][self.jid]
-			chats_window.set_active_tab(self.jid)
-			chats_window.window.present()
+			msg_window = gajim.interface.msg_win_mgr.get_window(self.jid)
+			msg_window.set_active_tab(self.jid)
+			msg_window.window.present()
 
 		self.adjust_height_and_move_popup_notification_windows()
 

@@ -56,6 +56,11 @@ class Contact:
 			return self.jid + '/' + self.resource
 		return self.jid
 
+	def get_shown_name(self):
+		if self.name:
+			return self.name
+		return self.jid.split('@')[0]
+
 class GC_Contact:
 	'''Information concerning each groupchat contact'''
 	def __init__(self, room_jid='', name='', show='', status='', role='',
@@ -71,6 +76,9 @@ class GC_Contact:
 
 	def get_full_jid(self):
 		return self.room_jid + '/' + self.name
+
+	def get_shown_name(self):
+		return self.name
 
 class Contacts:
 	'''Information concerning all contacts and groupchat contacts'''
@@ -181,6 +189,11 @@ class Contacts:
 
 	def get_contact_with_highest_priority(self, account, jid):
 		contacts = self.get_contacts_from_jid(account, jid)
+		if not contacts and '/' in jid:
+			# jid may be a nick jid, try it
+			room, nick = jid.split('/')
+			contact = self.get_gc_contact(account, room, nick)
+			return contact or []
 		return self.get_highest_prio_contact_from_contacts(contacts)
 
 	def get_first_contact_from_jid(self, account, jid):
@@ -266,15 +279,6 @@ class Contacts:
 		if not self._gc_contacts[account].has_key(room_jid):
 			return
 		del self._gc_contacts[account][room_jid]
-
-	def get_gc_contact(self, account, room_jid, nick):
-		if not self._gc_contacts.has_key(account):
-			return
-		if not self._gc_contacts[account].has_key(room_jid):
-			return
-		if not self._gc_contacts[account][room_jid].has_key(nick):
-			return
-		del self._gc_contacts[account][room_jid][nick]
 
 	def get_gc_list(self, account):
 		if not self._gc_contacts.has_key(account):

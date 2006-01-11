@@ -243,22 +243,20 @@ class NotificationAreaTooltip(BaseTooltip, StatusTable):
 
 		for acct in gajim.connections:
 			# we count unread chat/pm messages
-			chat_wins = gajim.interface.instances[acct]['chats']
-			for jid in chat_wins:
-				if jid != 'tabbed':
-					c = gajim.contacts.get_first_contact_from_jid(acct, jid)
-					if c:
-						unread_chat += chat_wins[jid].nb_unread[jid]
-					else:
-						unread_pm += chat_wins[jid].nb_unread[jid]
+			for ctl in gajim.interface.msg_win_mgr.controls():
+				c = gajim.contacts.get_first_contact_from_jid(acct, ctl.contact.jid)
+				if c:
+					unread_chat += ctl.nb_unread
+				else:
+					unread_pm += ctl.nb_unread
+
 			# we count unread gc/pm messages
-			gc_wins = gajim.interface.instances[acct]['gc']
-			for jid in gc_wins:
-				if jid != 'tabbed':
-					pm_msgs = gc_wins[jid].get_specific_unread(jid)
-					unread_gc += gc_wins[jid].nb_unread[jid]
-					unread_gc -= pm_msgs
-					unread_pm += pm_msgs
+			chat_t = message_control.TYPE_GC
+			for gc_control in gajim.interface.msg_win_mgr.get_controls(chat_t):
+				pm_msgs = gc_control.get_specific_unread()
+				unread_gc += gc_control.nb_unread
+				unread_gc -= pm_msgs
+				unread_pm += pm_msgs
 
 		if unread_chat or unread_single_chat or unread_gc or unread_pm:
 			text = ''
@@ -325,7 +323,7 @@ class GCTooltip(BaseTooltip):
 		if contact.jid.strip() != '':
 			info = '<span size="large" weight="bold">' + contact.jid + '</span>'
 		else:
-			info = '<span size="large" weight="bold">' + contact.name + '</span>'
+			info = '<span size="large" weight="bold">' + contact.get_shown_name() + '</span>'
 			
 		info += '\n<span weight="bold">' + _('Role: ') + '</span>' + \
 			 helpers.get_uf_role(contact.role)
@@ -406,7 +404,7 @@ class RosterTooltip(NotificationAreaTooltip):
 		
 		info = '<span size="large" weight="bold">' + prim_contact.jid + '</span>'
 		info += '\n<span weight="bold">' + _('Name: ') + '</span>' + \
-			gtkgui_helpers.escape_for_pango_markup(prim_contact.name)
+			gtkgui_helpers.escape_for_pango_markup(prim_contact.get_shown_name())
 		if prim_contact.sub:
 			info += '\n<span weight="bold">' + _('Subscription: ') + '</span>' + \
 				gtkgui_helpers.escape_for_pango_markup(prim_contact.sub)
@@ -486,7 +484,7 @@ class FileTransfersTooltip(BaseTooltip):
 			text += '\n<b>' + _('Sender: ') + '</b>'
 			sender = unicode(file_props['sender']).split('/')[0]
 			name = gajim.contacts.get_first_contact_from_jid( 
-				file_props['tt_account'], sender).name
+				file_props['tt_account'], sender).get_shown_name()
 		else:
 			text += '\n<b>' + _('Recipient: ') + '</b>' 
 			receiver = file_props['receiver']
@@ -497,7 +495,7 @@ class FileTransfersTooltip(BaseTooltip):
 				name = receiver
 			else:
 				name = gajim.contacts.get_first_contact_from_jid( 
-				file_props['tt_account'], receiver).name
+				file_props['tt_account'], receiver).get_shown_name()
 		text +=  gtkgui_helpers.escape_for_pango_markup(name)
 		text += '\n<b>' + _('Size: ') + '</b>' 
 		text += helpers.convert_bytes(file_props['size'])

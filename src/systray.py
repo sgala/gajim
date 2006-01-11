@@ -101,12 +101,13 @@ class Systray:
 	
 	def start_chat(self, widget, account, jid):
 		contact = gajim.contacts.get_first_contact_from_jid(account, jid)
-		if gajim.interface.instances[account]['chats'].has_key(jid):
-			gajim.interface.instances[account]['chats'][jid].window.present()
-			gajim.interface.instances[account]['chats'][jid].set_active_tab(jid)
+		if gajim.interface.msg_win_mgr.has_window(jid):
+		        gajim.interface.msg_win_mgr.get_window(jid).set_active_tab(jid)
+		        gajim.interface.msg_win_mgr.get_window(jid).present()
 		elif contact:
-			gajim.interface.roster.new_chat(contacts, account)
-			gajim.interface.instances[account]['chats'][jid].set_active_tab(jid)
+			gajim.interface.roster.new_chat(gajim.contacts[account][jid][0],
+							account)
+		        gajim.interface.msg_win_mgr.get_window(jid).set_active_tab(jid)
 	
 	def on_new_message_menuitem_activate(self, widget, account):
 		"""When new message menuitem is activated:
@@ -254,7 +255,7 @@ class Systray:
 				if group in contact.groups and contact.show != 'offline' and \
 						contact.show != 'error':
 					at_least_one = True
-					s = contact.name.replace('_', '__') # two _ show one _ and no underline happens
+					s = contact.get_shown_name().replace('_', '__') # two _ show one _ and no underline happens
 					item = gtk.ImageMenuItem(s)
 					# any given gtk widget can only be used in one place
 					# (here we use it in status menu too)

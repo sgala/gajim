@@ -39,6 +39,10 @@ opt_int = [ 'integer', 0 ]
 opt_str = [ 'string', 0 ]
 opt_bool = [ 'boolean', 0 ]
 opt_color = [ 'color', '^(#[0-9a-fA-F]{6})|()$' ]
+opt_one_window_types = ['never', 'always', 'peracct', 'pertype']
+
+DEFAULT_WINDOW_WIDTH  = 480
+DEFAULT_WINDOW_HEIGHT = 440
 
 class Config:
 
@@ -82,7 +86,6 @@ class Config:
 		'saveposition': [ opt_bool, True ],
 		'mergeaccounts': [ opt_bool, False ],
 		'sort_by_show': [ opt_bool, True ],
-		'usetabbedchat': [ opt_bool, True ],
 		'use_speller': [ opt_bool, False ],
 		'print_time': [ opt_str, 'always' ],
 		'useemoticons': [ opt_bool, True ],
@@ -94,17 +97,21 @@ class Config:
 		'custombrowser': [ opt_str, 'firefox' ],
 		'custommailapp': [ opt_str, 'mozilla-thunderbird -compose' ],
 		'custom_file_manager': [ opt_str, 'xffm' ],
-		'gc-x-position': [opt_int, 0],
-		'gc-y-position': [opt_int, 0],
-		'gc-width': [opt_int, 675],
-		'gc-height': [opt_int, 400],
 		'gc-hpaned-position': [opt_int, 540],
 		'gc_refer_to_nick_char': [opt_str, ','],
 		'gc_proposed_nick_char': [opt_str, '_'],
-		'chat-x-position': [opt_int, 0],
-		'chat-y-position': [opt_int, 0],
-		'chat-width': [opt_int, 480],
-		'chat-height': [opt_int, 440],
+		'msgwin-x-position': [opt_int, -1], # Default is to let the window manager decide
+		'msgwin-y-position': [opt_int, -1], # Default is to let the window manager decide
+		'msgwin-width': [opt_int, DEFAULT_WINDOW_WIDTH],
+		'msgwin-height': [opt_int, DEFAULT_WINDOW_HEIGHT],
+		'chat_msgwin-x-position': [opt_int, -1], # Default is to let the window manager decide
+		'chat_msgwin-y-position': [opt_int, -1], # Default is to let the window manager decide
+		'chat_msgwin-width': [opt_int, DEFAULT_WINDOW_WIDTH],
+		'chat_msgwin-height': [opt_int, DEFAULT_WINDOW_HEIGHT],
+		'gc_msgwin-x-position': [opt_int, -1], # Default is to let the window manager decide
+		'gc_msgwin-y-position': [opt_int, -1], # Default is to let the window manager decide
+		'gc_msgwin-width': [opt_int, DEFAULT_WINDOW_WIDTH],
+		'gc_msgwin-height': [opt_int, DEFAULT_WINDOW_HEIGHT],
 		'single_msg-x-position': [opt_int, 0],
 		'single_msg-y-position': [opt_int, 0],
 		'single_msg-width': [opt_int, 400],
@@ -141,6 +148,7 @@ class Config:
 		'autodetect_browser_mailer': [opt_bool, True],
 		'print_ichat_every_foo_minutes': [opt_int, 5],
 		'confirm_close_muc': [opt_bool, True, _('Ask before closing a group chat tab/window.')],
+		'noconfirm_close_muc_rooms': [opt_str, '', _('A list of rooms that do not require confirmation before closing')],
 		'notify_on_file_complete': [opt_bool, True], # notif. on file complete
 		'file_transfers_port': [opt_int, 28011],  # port, used for file transfers
 		'ft_override_host_to_send': [opt_str, '', _('Overrides the host we send for File Transfer in case of address translation/port forwarding.')], 
@@ -167,7 +175,7 @@ class Config:
 		'show_status_msgs_in_roster': [opt_bool, True, _('If True, Gajim will display the status message, if not empty, for every contact under the contact name in roster window')],
 		'show_avatars_in_roster': [opt_bool, True],
 		'ask_avatars_on_startup': [opt_bool, True, _('If True, Gajim will ask for avatar each contact that did not have an avatar last time or has one cached that is too old.')],
-		#FIXME: remvoe you and make it Gajim will not; and/or his or *her* status messages
+		#FIXME: remove you and make it Gajim will not; and/or his or *her* status messages
 		'print_status_in_chats': [opt_bool, True, _('If False, you will no longer see status line in chats when a contact changes his or her status and/or his status message.')],
 		'log_contact_status_changes': [opt_bool, False],
 		'restored_messages_color': [opt_str, 'grey'],
@@ -176,6 +184,8 @@ class Config:
 		'use_urgency_hint': [opt_bool, True, _('If True and installed GTK+ and PyGTK versions are at least 2.8, make the window flash (the default behaviour in most Window Managers) when holding pending events.')],
 		'notification_timeout': [opt_int, 5],
 		'send_sha_in_gc_presence': [opt_bool, True, _('Jabberd1.4 does not like sha info when one join a password protected room. Turn this option to False to stop sending sha info in groupchat presences')],
+		'one_message_window': [opt_str, 'never',
+			_('Controls the window where new messages are placed.\n\'always\' - All messages are sent to a single window.\n\'never\' - All messages get their own window.\n\'peracct\' - Messages for each account are sent to a specific window.\n\'pertype\' - Each message type (e.g., chats vs. groupchats) are sent to a specific window. Note, changing this option requires restarting Gajim before the changes will take effect')],
 		'show_avatar_in_chat': [opt_bool, True, _('If False, you will no longer see the avatar in the chat window')],
 	}
 
@@ -212,7 +222,11 @@ class Config:
 			'http_auth': [opt_str, 'ask'], # yes, no, ask
 			# proxy65 for FT
 			'file_transfer_proxies': [opt_str, 
-			'proxy.jabber.org, proxy65.jabber.autocom.pl, proxy.jabber.cd.chalmers.se, proxy.netlab.cz, proxy65.jabber.ccc.de, proxy65.unstable.nl'] 
+			'proxy.jabber.org, proxy65.jabber.autocom.pl, proxy.jabber.cd.chalmers.se, proxy.netlab.cz, proxy65.jabber.ccc.de, proxy65.unstable.nl'],
+			'msgwin-x-position': [opt_int, -1], # Default is to let the window manager decide
+			'msgwin-y-position': [opt_int, -1], # Default is to let the window manager decide
+			'msgwin-width': [opt_int, DEFAULT_WINDOW_WIDTH],
+			'msgwin-height': [opt_int, DEFAULT_WINDOW_HEIGHT],
 		}, {}),
 		'statusmsg': ({
 			'message': [ opt_str, '' ],

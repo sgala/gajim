@@ -210,19 +210,13 @@ def move_window(window, x, y):
 
 def resize_window(window, w, h):
 	'''resizes window but also checks if huge window or negative values'''
+	if not w or not h:
+		return
 	if w > screen_w:
 		w = screen_w
 	if h > screen_h:
 		h = screen_h
 	window.resize(abs(w), abs(h))
-
-def one_window_opened(typ):
-	for account in gajim.connections:
-		if not gajim.interface.instances[account].has_key(typ):
-			continue
-		if len(gajim.interface.instances[account][typ]):
-			return True
-	return False
 
 class TagInfoHandler(xml.sax.ContentHandler):
 	def __init__(self, tagname1, tagname2):
