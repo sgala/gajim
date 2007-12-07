@@ -32,7 +32,7 @@ from client import *
 class NBCommonClient(CommonClient):
 	''' Base for Client and Component classes.'''
 	def __init__(self, server, port=5222, debug=['always', 'nodebuilder'], caller=None, 
-		on_connect=None, on_proxy_failure=None, on_connect_failure=None):
+		on_connect=None, on_connect_failure=None):
 		''' Caches server name and (optionally) port to connect to. "debug" parameter specifies
 			the debug IDs that will go into debug output. You can either specifiy an "include"
 			or "exclude" list. The latter is done via adding "always" pseudo-ID to the list.
@@ -65,7 +65,6 @@ class NBCommonClient(CommonClient):
 		self.idlequeue = None
 		self.socket = None
 		self.on_connect = on_connect
-		self.on_proxy_failure = on_proxy_failure
 		self.on_connect_failure = on_connect_failure
 		
 	def set_idlequeue(self, idlequeue):
@@ -89,8 +88,6 @@ class NBCommonClient(CommonClient):
 			self.NonBlockingTLS.PlugOut()
 		if self.__dict__.has_key('NBHTTPPROXYsocket'):
 			self.NBHTTPPROXYsocket.PlugOut()
-		if self.__dict__.has_key('NBSOCKS5PROXYsocket'):
-			self.NBSOCKS5PROXYsocket.PlugOut()
 		if self.__dict__.has_key('NonBlockingTcp'):
 			self.NonBlockingTcp.PlugOut()
 		
@@ -105,21 +102,9 @@ class NBCommonClient(CommonClient):
 			server = (self.Server, self.Port)
 		self._Server,  self._Proxy, self._Ssl = server ,  proxy, ssl
 		self.on_stream_start = on_stream_start
-		if proxy:
-			if proxy.has_key('type'):
-				type_ = proxy['type']
-				if type_ == 'socks5':
-					self.socket = transports_nb.NBSOCKS5PROXYsocket(
-						self._on_connected, self._on_proxy_failure,
-						self._on_connected_failure, proxy, server)
-				elif type_ == 'http':
-					self.socket = transports_nb.NBHTTPPROXYsocket(self._on_connected,
-						self._on_proxy_failure, self._on_connected_failure, proxy,
-						server)
-			else:
-				self.socket = transports_nb.NBHTTPPROXYsocket(self._on_connected,
-					self._on_proxy_failure, self._on_connected_failure, proxy,
-					server)
+		if proxy: 
+			self.socket = transports_nb.NBHTTPPROXYsocket(self._on_connected, 
+				self._on_connected_failure, proxy, server)
 		else: 
 			self.connected = 'tcp'
 			self.socket = transports_nb.NonBlockingTcp(self._on_connected, 
@@ -131,10 +116,6 @@ class NBCommonClient(CommonClient):
 		self.on_stream_start = on_stream_start
 		self.onreceive(self._on_receive_document_attrs)
 
-	def _on_proxy_failure(self, reason): 
-		if self.on_proxy_failure:
-			self.on_proxy_failure(reason)
-
 	def _on_connected_failure(self, retry = None): 
 		if self.socket:
 			self.socket.disconnect()
@@ -142,12 +123,8 @@ class NBCommonClient(CommonClient):
 			self.on_connect_failure(retry)
 
 	def _on_connected(self):
-		# FIXME: why was this needed? Please note that we're working
-		# in nonblocking mode, and this handler is actually called
-		# as soon as connection is initiated, NOT when connection
-		# succeeds, as the name suggests.
-		# # connect succeeded, so no need of this callback anymore 
-		# self.on_connect_failure = None
+		# connect succeded, so no need of this callback anymore
+		self.on_connect_failure = None
 		self.connected = 'tcp'
 		if self._Ssl:
 			transports_nb.NonBlockingTLS().PlugIn(self, now=1)

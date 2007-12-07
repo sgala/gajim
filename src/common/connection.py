@@ -2,33 +2,24 @@
 ##
 ##
 ## Copyright (C) 2003-2004 Vincent Hanquez <tab@snarc.org>
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
-##                         Dimitur Kirov <dkirov@gmail.com>
-##                         Travis Shirk <travis@pobox.com>
-## Copyright (C) 2007 Julien Pivotto <roidelapluie@gmail.com>
-##                    Stephan Erb <steve-e@h3c.de>
+## Copyright (C) 2005-2006 Dimitur Kirov <dkirov@gmail.com>
+## Copyright (C) 2005-2006 Travis Shirk <travis@pobox.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
 ##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
-##
+
 
 import os
 import random
-import socket
-
-import time
 
 try:
 	randomsource = random.SystemRandom()
@@ -52,63 +43,17 @@ USE_GPG = GnuPG.USE_GPG
 
 from common.rst_xhtml_generator import create_xhtml
 
-from string import Template
-import logging
-log = logging.getLogger('gajim.c.connection')
-
-import gtkgui_helpers
-
-ssl_error = {
-2: _("Unable to get issuer certificate"),
-3: _("Unable to get certificate CRL"),
-4: _("Unable to decrypt certificate's signature"),
-5: _("Unable to decrypt CRL's signature"),
-6: _("Unable to decode issuer public key"),
-7: _("Certificate signature failure"),
-8: _("CRL signature failure"),
-9: _("Certificate is not yet valid"),
-10: _("Certificate has expired"),
-11: _("CRL is not yet valid"),
-12: _("CRL has expired"),
-13: _("Format error in certificate's notBefore field"),
-14: _("Format error in certificate's notAfter field"),
-15: _("Format error in CRL's lastUpdate field"),
-16: _("Format error in CRL's nextUpdate field"),
-17: _("Out of memory"),
-18: _("Self signed certificate in certificate chain"),
-19: _("Unable to get local issuer certificate"),
-20: _("Unable to verify the first certificate"),
-21: _("Unable to verify the first certificate"),
-22: _("Certificate chain too long"),
-23: _("Certificate revoked"),
-24: _("Invalid CA certificate"),
-25: _("Path length constraint exceeded"),
-26: _("Unsupported certificate purpose"),
-27: _("Certificate not trusted"),
-28: _("Certificate rejected"),
-29: _("Subject issuer mismatch"),
-30: _("Authority and subject key identifier mismatch"),
-31: _("Authority and issuer serial number mismatch"),
-32: _("Key usage does not include certificate signing"),
-50: _("Application verification failure")
-}
 class Connection(ConnectionHandlers):
 	'''Connection class'''
 	def __init__(self, name):
 		ConnectionHandlers.__init__(self)
 		self.name = name
-		# self.connected:
-		# 0=>offline,
-		# 1=>connection in progress,
-		# 2=>authorised
-		self.connected = 0
+		self.connected = 0 # offline
 		self.connection = None # xmpppy ClientCommon instance
 		# this property is used to prevent double connections
 		self.last_connection = None # last ClientCommon instance
 		self.is_zeroconf = False
 		self.gpg = None
-		if USE_GPG:
-			self.gpg = GnuPG.GnuPG(gajim.config.get('use_gpg_agent'))
 		self.status = ''
 		self.priority = gajim.get_priority(name, 'offline')
 		self.old_show = ''
@@ -119,7 +64,6 @@ class Connection(ConnectionHandlers):
 		self.time_to_reconnect = None
 		self.last_time_to_reconnect = None
 		self.new_account_info = None
-		self.new_account_form = None
 		self.bookmarks = []
 		self.annotations = {}
 		self.on_purpose = False
@@ -128,27 +72,23 @@ class Connection(ConnectionHandlers):
 		self.last_history_line = {}
 		self.password = passwords.get_password(name)
 		self.server_resource = gajim.config.get_per('accounts', name, 'resource')
-		# All valid resource substitution strings should be added to this hash.
-		if self.server_resource:
-			self.server_resource = Template(self.server_resource).safe_substitute({
-				'hostname': socket.gethostname()
-			})
 		if gajim.config.get_per('accounts', self.name, 'keep_alives_enabled'):
 			self.keepalives = gajim.config.get_per('accounts', self.name,'keep_alive_every_foo_secs')
 		else:
 			self.keepalives = 0
 		self.privacy_rules_supported = False
-		self.blocked_list = []
-		self.blocked_contacts = []
-		self.blocked_groups = []
-		self.pep_supported = False
-		# Do we continue connection when we get roster (send presence,get vcard..)
+		# Do we continue connection when we get roster (send presence,get vcard...)
 		self.continue_connect_info = None
 		# To know the groupchat jid associated with a sranza ID. Useful to
 		# request vcard or os info... to a real JID but act as if it comes from
 		# the fake jid
 		self.groupchat_jids = {} # {ID : groupchat_jid}
-
+		if USE_GPG:
+			self.gpg = GnuPG.GnuPG(gajim.config.get('use_gpg_agent'))
+			gajim.config.set('usegpg', True)
+		else:
+			gajim.config.set('usegpg', False)
+		
 		self.on_connect_success = None
 		self.on_connect_failure = None
 		self.retrycount = 0
@@ -173,19 +113,18 @@ class Connection(ConnectionHandlers):
 		# Do not try to reco while we are already trying
 		self.time_to_reconnect = None
 		if self.connected < 2: # connection failed
-			log.debug('reconnect')
-			self.connected = 1
-			self.dispatch('STATUS', 'connecting')
+			gajim.log.debug('reconnect')
 			self.retrycount += 1
+			signed = self.get_signed_msg(self.status)
 			self.on_connect_auth = self._init_roster
-			self.connect_and_init(self.old_show, self.status, self.gpg != None)
+			self.connect_and_init(self.old_show, self.status, signed)
 		else:
 			# reconnect succeeded
 			self.time_to_reconnect = None
 			self.retrycount = 0
-
+	
 	# We are doing disconnect at so many places, better use one function in all
-	def disconnect(self, on_purpose=False):
+	def disconnect(self, on_purpose = False):
 		self.on_purpose = on_purpose
 		self.connected = 0
 		self.time_to_reconnect = None
@@ -196,21 +135,21 @@ class Connection(ConnectionHandlers):
 			self.connection.disconnect()
 			self.last_connection = None
 			self.connection = None
-
+	
 	def _disconnectedReconnCB(self):
 		'''Called when we are disconnected'''
-		log.debug('disconnectedReconnCB')
+		gajim.log.debug('disconnectedReconnCB')
 		if gajim.account_is_connected(self.name):
 			# we cannot change our status to offline or connecting
 			# after we auth to server
 			self.old_show = STATUS_LIST[self.connected]
 		self.connected = 0
+		self.dispatch('STATUS', 'offline')
 		if not self.on_purpose:
-			self.dispatch('STATUS', 'offline')
 			self.disconnect()
 			if gajim.config.get_per('accounts', self.name, 'autoreconnect'):
-				self.connected = -1
-				self.dispatch('STATUS', 'error')
+				self.connected = 1
+				self.dispatch('STATUS', 'connecting')
 				if gajim.status_before_autoaway[self.name]:
 					# We were auto away. So go back online
 					self.status = gajim.status_before_autoaway[self.name]
@@ -225,7 +164,7 @@ class Connection(ConnectionHandlers):
 					self.last_time_to_reconnect *= 1.5
 				self.last_time_to_reconnect += randomsource.randint(0, 5)
 				self.time_to_reconnect = int(self.last_time_to_reconnect)
-				log.info("Reconnect to %s in %ss", self.name, self.time_to_reconnect)
+				gajim.log.debug("Reconnect to %s in %ss", self.name, self.time_to_reconnect)
 				gajim.idlequeue.set_alarm(self._reconnect_alarm,
 					self.time_to_reconnect)
 			elif self.on_connect_failure:
@@ -238,7 +177,7 @@ class Connection(ConnectionHandlers):
 			self.disconnect()
 		self.on_purpose = False
 	# END disconenctedReconnCB
-
+	
 	def _connection_lost(self):
 		self.disconnect(on_purpose = False)
 		self.dispatch('STATUS', 'offline')
@@ -255,68 +194,30 @@ class Connection(ConnectionHandlers):
 					# it's a new account
 					if not data[1]: # wrong answer
 						self.dispatch('ACC_NOT_OK', (
-							_('Server %s answered wrongly to register request: %s')\
+							_('Transport %s answered wrongly to register request: %s')\
 							% (data[0], data[3])))
 						return
-					is_form = data[2]
-					conf = data[1]
-					if self.new_account_form:
-						def _on_register_result(result):
-							if not common.xmpp.isResultNode(result):
-								self.dispatch('ACC_NOT_OK', (result.getError()))
-								return
-							if USE_GPG:
-								self.gpg = GnuPG.GnuPG(gajim.config.get(
-									'use_gpg_agent'))
-							self.dispatch('ACC_OK', (self.new_account_info))
-							self.new_account_info = None
-							self.new_account_form = None
-							if self.connection:
-								self.connection.UnregisterDisconnectHandler(
-									self._on_new_account)
-							self.disconnect(on_purpose=True)
-						# it's the second time we get the form, we have info user
-						# typed, so send them
-						if is_form:
-							#TODO: Check if form has changed
-							iq = Iq('set', NS_REGISTER, to=self._hostname)
-							iq.setTag('query').addChild(node=self.new_account_form)
-							self.connection.SendAndCallForResponse(iq,
-								_on_register_result)
+					req = data[1]
+					req['username'] = self.new_account_info['name']
+					req['password'] = self.new_account_info['password']
+					def _on_register_result(result):
+						if not common.xmpp.isResultNode(result):
+							self.dispatch('ACC_NOT_OK', (result.getError()))
+							return
+						self.password = self.new_account_info['password']
+						if USE_GPG:
+							self.gpg = GnuPG.GnuPG(gajim.config.get('use_gpg_agent'))
+							gajim.config.set('usegpg', True)
 						else:
-							if self.new_account_form.keys().sort() != \
-							conf.keys().sort():
-								# requested config has changed since first connection
-								self.dispatch('ACC_NOT_OK', (_(
-									'Server %s provided a different registration form')\
-									% data[0]))
-								return
-							common.xmpp.features_nb.register(self.connection,
-								self._hostname, self.new_account_form,
-								_on_register_result)
-						return
-					try:
-						errnum = self.connection.Connection.ssl_errnum
-					except AttributeError:
-						errnum = -1 # we don't have an errnum
-					ssl_msg = ''
-					if errnum > 0:
-						if errnum in ssl_error:
-							ssl_msg = ssl_error[errnum]
-						else:
-							ssl_msg = _('Unknown SSL error: %d') % errnum
-					ssl_cert = ''
-					if hasattr(self.connection.Connection, 'ssl_cert_pem'):
-						ssl_cert = self.connection.Connection.ssl_cert_pem
-					ssl_fingerprint = ''
-					if hasattr(self.connection.Connection, 'ssl_fingerprint_sha1'):
-						ssl_fingerprint = \
-							self.connection.Connection.ssl_fingerprint_sha1
-					self.dispatch('NEW_ACC_CONNECTED', (conf, is_form, ssl_msg,
-						ssl_cert, ssl_fingerprint))
-					self.connection.UnregisterDisconnectHandler(
-						self._on_new_account)
-					self.disconnect(on_purpose=True)
+							gajim.config.set('usegpg', False)
+						gajim.connections[self.name] = self
+						self.dispatch('ACC_OK', (self.new_account_info))
+						self.new_account_info = None
+						if self.connection:
+							self.connection.UnregisterDisconnectHandler(self._on_new_account)
+						self.disconnect(on_purpose=True)
+					common.xmpp.features_nb.register(self.connection, data[0],
+						req, _on_register_result)
 					return
 				if not data[1]: # wrong answer
 					self.dispatch('ERROR', (_('Invalid answer'),
@@ -361,8 +262,6 @@ class Connection(ConnectionHandlers):
 				self.dispatch('STANZA_SENT', unicode(data))
 
 	def select_next_host(self, hosts):
-		'''Chooses best 'real' host basing on the SRV priority and weight data;
-		more info in RFC2782'''
 		hosts_best_prio = []
 		best_prio = 65535
 		sum_weight = 0
@@ -422,7 +321,6 @@ class Connection(ConnectionHandlers):
 			proxy['port'] = gajim.config.get_per('proxies', p, 'port')
 			proxy['user'] = gajim.config.get_per('proxies', p, 'user')
 			proxy['password'] = gajim.config.get_per('proxies', p, 'pass')
-			proxy['type'] = gajim.config.get_per('proxies', p, 'type')
 		else:
 			proxy = None
 
@@ -459,15 +357,6 @@ class Connection(ConnectionHandlers):
 			self._hosts = [i for i in result_array]
 		self.connect_to_next_host()
 
-	def on_proxy_failure(self, reason):
-		log.debug('Connection to proxy failed')
-		self.time_to_reconnect = None
-		self.on_connect_failure = None
-		self.disconnect(on_purpose = True)
-		self.dispatch('STATUS', 'offline')
-		self.dispatch('CONNECTION_LOST',
-			(_('Connection to proxy failed'), reason))
-
 	def connect_to_next_host(self, retry = False):
 		if len(self._hosts):
 			if self.last_connection:
@@ -477,12 +366,10 @@ class Connection(ConnectionHandlers):
 			if gajim.verbose:
 				con = common.xmpp.NonBlockingClient(self._hostname, caller = self,
 					on_connect = self.on_connect_success,
-					on_proxy_failure = self.on_proxy_failure,
 					on_connect_failure = self.connect_to_next_host)
 			else:
 				con = common.xmpp.NonBlockingClient(self._hostname, debug = [], caller = self,
 					on_connect = self.on_connect_success,
-					on_proxy_failure = self.on_proxy_failure,
 					on_connect_failure = self.connect_to_next_host)
 			self.last_connection = con
 			# increase default timeout for server responses
@@ -496,12 +383,11 @@ class Connection(ConnectionHandlers):
 			if self.on_connect_success == self._on_new_account:
 				con.RegisterDisconnectHandler(self._on_new_account)
 
-			log.info("Connecting to %s: [%s:%d]", self.name, host['host'], host['port'])
 			con.connect((host['host'], host['port']), proxy = self._proxy,
 				secure = self._secure)
+			return
 		else:
 			if not retry and self.retrycount == 0:
-				log.debug("Out of hosts, giving up connecting to %s", self.name)
 				self.time_to_reconnect = None
 				if self.on_connect_failure:
 					self.on_connect_failure()
@@ -529,53 +415,25 @@ class Connection(ConnectionHandlers):
 			return
 		self.hosts = []
 		if not con_type:
-			log.debug('Could not connect to %s:%s' % (self._current_host['host'],
+			gajim.log.debug('Could not connect to %s:%s' % (self._current_host['host'],
 				self._current_host['port']))
 		self.connected_hostname = self._current_host['host']
 		self.on_connect_failure = None
 		con.RegisterDisconnectHandler(self._disconnectedReconnCB)
-		log.debug(_('Connected to server %s:%s with %s') % (self._current_host['host'],
+		gajim.log.debug(_('Connected to server %s:%s with %s') % (self._current_host['host'],
 			self._current_host['port'], con_type))
-
-		name = gajim.config.get_per('accounts', self.name, 'name')
-		hostname = gajim.config.get_per('accounts', self.name, 'hostname')
-		self.connection = con
-		try:
-			errnum = con.Connection.ssl_errnum
-		except AttributeError:
-			errnum = -1 # we don't have an errnum
-		if errnum > 0:
-			text = _('The authenticity of the %s certificate could be invalid.') %\
-				hostname
-			if errnum in ssl_error:
-				text += _('\nSSL Error: %s') % ssl_error[errnum]
-			else:
-				text += _('\nUnknown SSL error: %d') % errnum
-			self.dispatch('SSL_ERROR', (text, con.Connection.ssl_cert_pem,
-				con.Connection.ssl_fingerprint_sha1))
-			return True
-		if hasattr(con.Connection, 'ssl_fingerprint_sha1'):
-			saved_fingerprint = gajim.config.get_per('accounts', self.name, 'ssl_fingerprint_sha1')
-			if saved_fingerprint:
-				# Check sha1 fingerprint
-				if con.Connection.ssl_fingerprint_sha1 != saved_fingerprint:
-					self.dispatch('FINGERPRINT_ERROR',
-						(con.Connection.ssl_fingerprint_sha1,))
-					return True
 		self._register_handlers(con, con_type)
-		con.auth(name, self.password, self.server_resource, 1, self.__on_auth)
-
-
-	def ssl_certificate_accepted(self):
-		name = gajim.config.get_per('accounts', self.name, 'name')
-		self._register_handlers(self.connection, 'ssl')
-		self.connection.auth(name, self.password, self.server_resource, 1, self.__on_auth)
+		return True
 
 	def _register_handlers(self, con, con_type):
 		self.peerhost = con.get_peerhost()
 		# notify the gui about con_type
 		self.dispatch('CON_TYPE', con_type)
 		ConnectionHandlers._register_handlers(self, con, con_type)
+		name = gajim.config.get_per('accounts', self.name, 'name')
+		hostname = gajim.config.get_per('accounts', self.name, 'hostname')
+		self.connection = con
+		con.auth(name, self.password, self.server_resource, 1, self.__on_auth)
 
 	def __on_auth(self, con, auth):
 		if not con:
@@ -608,8 +466,7 @@ class Connection(ConnectionHandlers):
 			gajim.log.debug("Couldn't authenticate to %s" % self._hostname)
 			self.disconnect(on_purpose = True)
 			self.dispatch('STATUS', 'offline')
-			self.dispatch('ERROR', (_('Authentication failed with "%s"') % \
-				self._hostname,
+			self.dispatch('ERROR', (_('Authentication failed with "%s"') % self._hostname,
 				_('Please check your login and password for correctness.')))
 			if self.on_connect_auth:
 				self.on_connect_auth(None)
@@ -618,34 +475,18 @@ class Connection(ConnectionHandlers):
 
 	def quit(self, kill_core):
 		if kill_core and gajim.account_is_connected(self.name):
-			self.disconnect(on_purpose=True)
-
+			self.disconnect(on_purpose = True)
+	
 	def get_privacy_lists(self):
 		if not self.connection:
 			return
 		common.xmpp.features_nb.getPrivacyLists(self.connection)
 
-	def sendPing(self, pingTo):
-		if not self.connection:
-			return
-		iq = common.xmpp.Iq('get', to = pingTo.get_full_jid())
-		iq.addChild(name = 'ping', namespace = common.xmpp.NS_PING)
-		def _on_response(resp):
-			timePong = time_time()
-			if not common.xmpp.isResultNode(resp):
-				self.dispatch('PING_ERROR', (pingTo))
-				return
-			timeDiff = round(timePong - timePing,2)
-			self.dispatch('PING_REPLY', (pingTo, timeDiff))
-		self.dispatch('PING_SENT', (pingTo))
-		timePing = time_time()
-		self.connection.SendAndCallForResponse(iq, _on_response)
-
 	def get_active_default_lists(self):
 		if not self.connection:
 			return
 		common.xmpp.features_nb.getActiveAndDefaultPrivacyLists(self.connection)
-
+	
 	def del_privacy_list(self, privacy_list):
 		if not self.connection:
 			return
@@ -659,17 +500,17 @@ class Connection(ConnectionHandlers):
 					'again.') % privacy_list))
 		common.xmpp.features_nb.delPrivacyList(self.connection, privacy_list,
 			_on_del_privacy_list_result)
-
+	
 	def get_privacy_list(self, title):
 		if not self.connection:
 			return
 		common.xmpp.features_nb.getPrivacyList(self.connection, title)
-
+	
 	def set_privacy_list(self, listname, tags):
 		if not self.connection:
 			return
 		common.xmpp.features_nb.setPrivacyList(self.connection, listname, tags)
-
+	
 	def set_active_list(self, listname):
 		if not self.connection:
 			return
@@ -679,7 +520,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		common.xmpp.features_nb.setDefaultPrivacyList(self.connection, listname)
-
+	
 	def build_privacy_rule(self, name, action):
 		'''Build a Privacy rule stanza for invisibility'''
 		iq = common.xmpp.Iq('set', common.xmpp.NS_PRIVACY, xmlns = '')
@@ -697,8 +538,6 @@ class Connection(ConnectionHandlers):
 		self.connection.send(iq)
 
 	def send_invisible_presence(self, msg, signed, initial = False):
-		if not self.connection:
-			return
 		# try to set the privacy rule
 		iq = self.build_privacy_rule('invisible', 'deny')
 		self.connection.SendAndCallForResponse(iq, self._continue_invisible,
@@ -732,7 +571,7 @@ class Connection(ConnectionHandlers):
 
 			#Get bookmarks from private namespace
 			self.get_bookmarks()
-
+			
 			#Get annotations
 			self.get_annotations()
 
@@ -740,37 +579,29 @@ class Connection(ConnectionHandlers):
 			self.dispatch('SIGNED_IN', ())
 
 	def test_gpg_passphrase(self, password):
-		if not self.gpg:
-			return False
 		self.gpg.passphrase = password
 		keyID = gajim.config.get_per('accounts', self.name, 'keyid')
 		signed = self.gpg.sign('test', keyID)
 		self.gpg.password = None
 		return signed != 'BAD_PASSPHRASE'
 
-	def get_signed_presence(self, msg, callback = None):
-		if gajim.config.get_per('accounts', self.name, 'gpg_sign_presence'):
-			return self.get_signed_msg(msg, callback)
-		return ''
-
-	def get_signed_msg(self, msg, callback = None):
-		'''returns the signed message if possible
-		or an empty string if gpg is not used
-		or None if waiting for passphrase.
-		callback is the function to call when user give the passphrase'''
+	def get_signed_msg(self, msg):
 		signed = ''
 		keyID = gajim.config.get_per('accounts', self.name, 'keyid')
-		if keyID and self.gpg:
+		if keyID and USE_GPG:
 			use_gpg_agent = gajim.config.get('use_gpg_agent')
-			if self.gpg.passphrase is None and not use_gpg_agent:
+			if self.connected < 2 and self.gpg.passphrase is None and \
+				not use_gpg_agent:
 				# We didn't set a passphrase
-				return None
-			if self.gpg.passphrase is not None or use_gpg_agent:
+				self.dispatch('ERROR', (_('OpenPGP passphrase was not given'),
+					#%s is the account name here
+					_('You will be connected to %s without OpenPGP.') % self.name))
+			elif self.gpg.passphrase is not None or use_gpg_agent:
 				signed = self.gpg.sign(msg, keyID)
 				if signed == 'BAD_PASSPHRASE':
-					self.gpg = None
 					signed = ''
-					self.dispatch('BAD_PASSPHRASE', ())
+					if self.connected < 2:
+						self.dispatch('BAD_PASSPHRASE', ())
 		return signed
 
 	def connect_and_auth(self):
@@ -778,48 +609,21 @@ class Connection(ConnectionHandlers):
 		self.on_connect_failure = self._connect_failure
 		self.connect()
 
-	def connect_and_init(self, show, msg, sign_msg):
-		self.continue_connect_info = [show, msg, sign_msg]
+	def connect_and_init(self, show, msg, signed):
+		self.continue_connect_info = [show, msg, signed]
 		self.on_connect_auth = self._init_roster
 		self.connect_and_auth()
 
 	def _init_roster(self, con):
 		self.connection = con
-		if not self.connection:
-			return
-		self.connection.set_send_timeout(self.keepalives, self.send_keepalive)
-		self.connection.onreceive(None)
-		iq = common.xmpp.Iq('get', common.xmpp.NS_PRIVACY, xmlns = '')
-		id = self.connection.getAnID()
-		iq.setID(id)
-		self.awaiting_answers[id] = (PRIVACY_ARRIVED, )
-		self.connection.send(iq)
-
-	def send_custom_status(self, show, msg, jid):
-		if not show in STATUS_LIST:
-			return -1
-		if not self.connection:
-			return
-		sshow = helpers.get_xmpp_show(show)
-		if not msg:
-			msg = ''
-		keyID = gajim.config.get_per('accounts', self.name, 'keyid')
-		if show == 'offline':
-			p = common.xmpp.Presence(typ = 'unavailable', to = jid)
-			p = self.add_sha(p, False)
-			if msg:
-				p.setStatus(msg)
-		else:
-			signed = self.get_signed_presence(msg)
-			priority = unicode(gajim.get_priority(self.name, sshow))
-			p = common.xmpp.Presence(typ = None, priority = priority, show = sshow,
-				to = jid)
-			p = self.add_sha(p)
-			if msg:
-				p.setStatus(msg)
-			if signed:
-				p.setTag(common.xmpp.NS_SIGNED + ' x').setData(signed)
-		self.connection.send(p)
+		if self.connection:
+			con.set_send_timeout(self.keepalives, self.send_keepalive)
+			self.connection.onreceive(None)
+			iq = common.xmpp.Iq('get', common.xmpp.NS_PRIVACY, xmlns = '')
+			id = self.connection.getAnID()
+			iq.setID(id)
+			self.awaiting_answers[id] = (PRIVACY_ARRIVED, )
+			self.connection.send(iq)
 
 	def change_status(self, show, msg, auto = False):
 		if not show in STATUS_LIST:
@@ -828,28 +632,20 @@ class Connection(ConnectionHandlers):
 		if not msg:
 			msg = ''
 		keyID = gajim.config.get_per('accounts', self.name, 'keyid')
-		sign_msg = False
+		signed = ''
 		if not auto and not show == 'offline':
-			sign_msg = True
+			signed = self.get_signed_msg(msg)
 		self.status = msg
 		if show != 'offline' and not self.connected:
 			# set old_show to requested 'show' in case we need to
 			# recconect before we auth to server
 			self.old_show = show
-			self.on_purpose = False
+			self.on_purpose = False 
 			self.server_resource = gajim.config.get_per('accounts', self.name,
 				'resource')
-			# All valid resource substitution strings should be added to this hash.
-			if self.server_resource:
-				self.server_resource = Template(self.server_resource).\
-					safe_substitute({
-						'hostname': socket.gethostname()
-					})
-			if USE_GPG:
-				self.gpg = GnuPG.GnuPG(gajim.config.get('use_gpg_agent'))
-			self.connect_and_init(show, msg, sign_msg)
+			self.connect_and_init(show, msg, signed)
 
-		elif show == 'offline':
+		elif show == 'offline' and self.connected:
 			self.connected = 0
 			if self.connection:
 				self.on_purpose = True
@@ -871,7 +667,6 @@ class Connection(ConnectionHandlers):
 			was_invisible = self.connected == STATUS_LIST.index('invisible')
 			self.connected = STATUS_LIST.index(show)
 			if show == 'invisible':
-				signed = self.get_signed_presence(msg)
 				self.send_invisible_presence(msg, signed)
 				return
 			if was_invisible and self.privacy_rules_supported:
@@ -883,7 +678,6 @@ class Connection(ConnectionHandlers):
 			p = self.add_sha(p)
 			if msg:
 				p.setStatus(msg)
-			signed = self.get_signed_presence(msg)
 			if signed:
 				p.setTag(common.xmpp.NS_SIGNED + ' x').setData(signed)
 			if self.connection:
@@ -908,21 +702,21 @@ class Connection(ConnectionHandlers):
 
 		self.connection.send(msg_iq)
 
-	def send_message(self, jid, msg, keyID, type='chat', subject='',
-	chatstate=None, msg_id=None, composing_xep=None, resource=None,
-	user_nick=None, xhtml=None, session=None, forward_from=None, form_node=None):
+	def send_message(self, jid, msg, keyID, type = 'chat', subject='',
+	chatstate = None, msg_id = None, composing_xep = None, resource = None,
+	user_nick = None, xhtml = None):
 		if not self.connection:
 			return 1
 		if msg and not xhtml and gajim.config.get('rst_formatting_outgoing_messages'):
 			xhtml = create_xhtml(msg)
-		if not msg and chatstate is None and form_node is None:
+		if not msg and chatstate is None:
 			return 2
 		fjid = jid
 		if resource:
 			fjid += '/' + resource
 		msgtxt = msg
 		msgenc = ''
-		if keyID and self.gpg:
+		if keyID and USE_GPG:
 			#encrypt
 			msgenc, error = self.gpg.encrypt(msg, [keyID])
 			if msgenc and not error:
@@ -954,15 +748,12 @@ class Connection(ConnectionHandlers):
 		if msgenc:
 			msg_iq.setTag(common.xmpp.NS_ENCRYPTED + ' x').setData(msgenc)
 
-		if form_node:
-			msg_iq.addChild(node=form_node)
-
 		# JEP-0172: user_nickname
 		if user_nick:
 			msg_iq.setTag('nick', namespace = common.xmpp.NS_NICK).setData(
 				user_nick)
 
-		# chatstates - if peer supports xep85 or xep22, send chatstates
+		# chatstates - if peer supports jep85 or jep22, send chatstates
 		# please note that the only valid tag inside a message containing a <body>
 		# tag is the active event
 		if chatstate is not None:
@@ -979,60 +770,45 @@ class Connection(ConnectionHandlers):
 						msg_id = ''
 					chatstate_node.setTagData('id', msg_id)
 				# when msgtxt, requests JEP-0022 composing notification
-				if chatstate is 'composing' or msgtxt:
-					chatstate_node.addChild(name = 'composing')
-
-		if forward_from:
-			addresses = msg_iq.addChild('addresses',
-				namespace=common.xmpp.NS_ADDRESS)
-			addresses.addChild('address', attrs = {'type': 'ofrom',
-				'jid': forward_from})
-		if session:
-			# XEP-0201
-			session.last_send = time.time()
-			msg_iq.setThread(session.thread_id)
-
-			# XEP-0200
-			if session.enable_encryption:
-				msg_iq = session.encrypt_stanza(msg_iq)
+				if chatstate is 'composing' or msgtxt: 
+					chatstate_node.addChild(name = 'composing') 
 
 		self.connection.send(msg_iq)
-		if not forward_from and session.is_loggable():
-			no_log_for = gajim.config.get_per('accounts', self.name, 'no_log_for')\
-				.split()
-			ji = gajim.get_jid_without_resource(jid)
-			if self.name not in no_log_for and ji not in no_log_for:
-				log_msg = msg
-				if subject:
-					log_msg = _('Subject: %s\n%s') % (subject, msg)
-				if log_msg:
-					if type == 'chat':
-						kind = 'chat_msg_sent'
-					else:
-						kind = 'single_msg_sent'
-					try:
-						gajim.logger.write(kind, jid, log_msg)
-					except exceptions.PysqliteOperationalError, e:
-						self.dispatch('ERROR', (_('Disk Write Error'), str(e)))
+		no_log_for = gajim.config.get_per('accounts', self.name, 'no_log_for')\
+			.split()
+		ji = gajim.get_jid_without_resource(jid)
+		if self.name not in no_log_for and ji not in no_log_for:
+			log_msg = msg
+			if subject:
+				log_msg = _('Subject: %s\n%s') % (subject, msg)
+			if log_msg:
+				if type == 'chat':
+					kind = 'chat_msg_sent'
+				else:
+					kind = 'single_msg_sent'
+				try:
+					gajim.logger.write(kind, jid, log_msg)
+				except exceptions.PysqliteOperationalError, e:
+					self.dispatch('ERROR', (_('Disk Write Error'), str(e)))
 		self.dispatch('MSGSENT', (jid, msg, keyID))
-
+	
 	def send_stanza(self, stanza):
 		''' send a stanza untouched '''
 		if not self.connection:
 			return
 		self.connection.send(stanza)
-
+	
 	def ack_subscribed(self, jid):
 		if not self.connection:
 			return
-		log.debug('ack\'ing subscription complete for %s' % jid)
+		gajim.log.debug('ack\'ing subscription complete for %s' % jid)
 		p = common.xmpp.Presence(jid, 'subscribe')
 		self.connection.send(p)
 
 	def ack_unsubscribed(self, jid):
 		if not self.connection:
 			return
-		log.debug('ack\'ing unsubscription complete for %s' % jid)
+		gajim.log.debug('ack\'ing unsubscription complete for %s' % jid)
 		p = common.xmpp.Presence(jid, 'unsubscribe')
 		self.connection.send(p)
 
@@ -1040,7 +816,7 @@ class Connection(ConnectionHandlers):
 	auto_auth = False, user_nick = ''):
 		if not self.connection:
 			return
-		log.debug('subscription request for %s' % jid)
+		gajim.log.debug('subscription request for %s' % jid)
 		if auto_auth:
 			self.jids_for_auto_auth.append(jid)
 		# RFC 3921 section 8.2
@@ -1106,28 +882,12 @@ class Connection(ConnectionHandlers):
 			self.connection.getRoster().setItem(jid = jid, name = name,
 				groups = groups)
 
-	def send_new_account_infos(self, form, is_form):
-		if is_form:
-			# Get username and password and put them in new_account_info
-			for field in self._data_form.iter_fields():
-				if field.var == 'username':
-					self.new_account_info['name'] = field.value
-				if field.var == 'password':
-					self.new_account_info['password'] = field.value
-		else:
-			# Get username and password and put them in new_account_info
-			if form.has_key('username'):
-				self.new_account_info['name'] = form['username']
-			if form.has_key('password'):
-				self.new_account_info['password'] = form['password']
-		self.new_account_form = form
-		self.new_account(self.name, self.new_account_info)
-
 	def new_account(self, name, config, sync = False):
 		# If a connection already exist we cannot create a new account
 		if self.connection:
 			return
 		self._hostname = config['hostname']
+		self.server_resource = config['resource']
 		self.new_account_info = config
 		self.name = name
 		self.on_connect_success = self._on_new_account
@@ -1136,11 +896,13 @@ class Connection(ConnectionHandlers):
 
 	def _on_new_account(self, con = None, con_type = None):
 		if not con_type:
-			self.dispatch('NEW_ACC_NOT_CONNECTED',
+			self.dispatch('ACC_NOT_OK',
 				(_('Could not connect to "%s"') % self._hostname))
 			return
 		self.on_connect_failure = None
 		self.connection = con
+		#if con:
+		#	con.RegisterDisconnectHandler(self._on_new_account)
 		common.xmpp.features_nb.getRegInfo(con, self._hostname)
 
 	def account_changed(self, new_name):
@@ -1187,7 +949,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='get')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq3 = iq2.addChild(name='gajim', namespace='gajim:prefs')
 		self.connection.send(iq)
 
@@ -1197,7 +959,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='get')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq2.addChild(name='storage', namespace='storage:bookmarks')
 		self.connection.send(iq)
 
@@ -1206,13 +968,12 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='set')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq3 = iq2.addChild(name='storage', namespace='storage:bookmarks')
 		for bm in self.bookmarks:
 			iq4 = iq3.addChild(name = "conference")
 			iq4.setAttr('jid', bm['jid'])
 			iq4.setAttr('autojoin', bm['autojoin'])
-			iq4.setAttr('minimize', bm['minimize'])
 			iq4.setAttr('name', bm['name'])
 			# Only add optional elements if not empty
 			# Note: need to handle both None and '' as empty
@@ -1231,7 +992,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='get')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq2.addChild(name='storage', namespace='storage:rosternotes')
 		self.connection.send(iq)
 
@@ -1240,7 +1001,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='set')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq3 = iq2.addChild(name='storage', namespace='storage:rosternotes')
 		for jid in self.annotations.keys():
 			if self.annotations[jid]:
@@ -1255,7 +1016,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='get')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq2.addChild(name='storage', namespace='storage:metacontacts')
 		id = self.connection.getAnID()
 		iq.setID(id)
@@ -1267,7 +1028,7 @@ class Connection(ConnectionHandlers):
 		if not self.connection:
 			return
 		iq = common.xmpp.Iq(typ='set')
-		iq2 = iq.addChild(name='query', namespace=common.xmpp.NS_PRIVATE)
+		iq2 = iq.addChild(name='query', namespace='jabber:iq:private')
 		iq3 = iq2.addChild(name='storage', namespace='storage:metacontacts')
 		for tag in tags_list:
 			for data in tags_list[tag]:
@@ -1285,20 +1046,6 @@ class Connection(ConnectionHandlers):
 		p = common.xmpp.Presence(to = agent, typ = ptype, show = show)
 		p = self.add_sha(p, ptype != 'unavailable')
 		self.connection.send(p)
-
-	def check_unique_room_id_support(self, server, instance):
-		if not self.connection:
-			return
-		iq = common.xmpp.Iq(typ = 'get', to = server)
-		iq.setAttr('id', 'unique1')
-		iq.addChild('unique', namespace=common.xmpp.NS_MUC_UNIQUE)
-		def _on_response(resp):
-			if not common.xmpp.isResultNode(resp):
-				self.dispatch('UNIQUE_ROOM_ID_UNSUPPORTED', (server, instance))
-				return
-			self.dispatch('UNIQUE_ROOM_ID_SUPPORTED', (server, instance,
-				resp.getTag('unique').getData()))
-		self.connection.SendAndCallForResponse(iq, _on_response)
 
 	def join_gc(self, nick, room_jid, password):
 		# FIXME: This room JID needs to be normalized; see #1364
@@ -1318,15 +1065,10 @@ class Connection(ConnectionHandlers):
 		self.connection.send(p)
 
 		# last date/time in history to avoid duplicate
-		if not self.last_history_line.has_key(room_jid):
+		if not self.last_history_line.has_key(room_jid): 
 			# Not in memory, get it from DB
-			last_log = None
-			no_log_for = gajim.config.get_per('accounts', self.name, 'no_log_for')\
-				.split()
-			if self.name not in no_log_for and room_jid not in no_log_for:
-			# Do not check if we are not logging for this room
-				last_log = gajim.logger.get_last_date_that_has_logs(room_jid,
-					is_room = True)
+			last_log = gajim.logger.get_last_date_that_has_logs(room_jid,
+				is_room = True)
 			if last_log is None:
 				last_log = 0
 			self.last_history_line[room_jid]= last_log
@@ -1347,22 +1089,8 @@ class Connection(ConnectionHandlers):
 		self.connection.send(msg_iq)
 
 	def request_gc_config(self, room_jid):
-		if not self.connection:
-			return
 		iq = common.xmpp.Iq(typ = 'get', queryNS = common.xmpp.NS_MUC_OWNER,
 			to = room_jid)
-		self.connection.send(iq)
-
-	def destroy_gc_room(self, room_jid, reason = '', jid = ''):
-		if not self.connection:
-			return
-		iq = common.xmpp.Iq(typ = 'set', queryNS = common.xmpp.NS_MUC_OWNER,
-			to = room_jid)
-		destroy = iq.getTag('query').setTag('destroy')
-		if reason:
-			destroy.setTagData('reason', reason)
-		if jid:
-			destroy.setAttr('jid', jid)
 		self.connection.send(iq)
 
 	def send_gc_status(self, nick, jid, show, status):
@@ -1381,7 +1109,7 @@ class Connection(ConnectionHandlers):
 		# send instantly so when we go offline, status is sent to gc before we
 		# disconnect from jabber server
 		self.connection.send(p)
-		# Save the time we quit to avoid duplicate logs AND be faster than
+		# Save the time we quit to avoid duplicate logs AND be faster than 
 		# get that date from DB
 		self.last_history_line[jid] = time_time()
 
@@ -1442,7 +1170,7 @@ class Connection(ConnectionHandlers):
 		self.connection.send(iq)
 
 	def gpg_passphrase(self, passphrase):
-		if self.gpg:
+		if USE_GPG:
 			use_gpg_agent = gajim.config.get('use_gpg_agent')
 			if use_gpg_agent:
 				self.gpg.passphrase = None
@@ -1450,13 +1178,13 @@ class Connection(ConnectionHandlers):
 				self.gpg.passphrase = passphrase
 
 	def ask_gpg_keys(self):
-		if self.gpg:
+		if USE_GPG:
 			keys = self.gpg.get_keys()
 			return keys
 		return None
 
 	def ask_gpg_secrete_keys(self):
-		if self.gpg:
+		if USE_GPG:
 			keys = self.gpg.get_secret_keys()
 			return keys
 		return None
@@ -1491,13 +1219,11 @@ class Connection(ConnectionHandlers):
 		else:
 			_on_unregister_account_connect(self.connection)
 
-	def send_invite(self, room, to, reason='', continue_tag=False):
+	def send_invite(self, room, to, reason=''):
 		'''sends invitation'''
 		message=common.xmpp.Message(to = room)
 		c = message.addChild(name = 'x', namespace = common.xmpp.NS_MUC_USER)
 		c = c.addChild(name = 'invite', attrs={'to' : to})
-		if continue_tag:
-			c.addChild(name = 'continue')
 		if reason != '':
 			c.setTagData('reason', reason)
 		self.connection.send(message)
@@ -1513,40 +1239,5 @@ class Connection(ConnectionHandlers):
 				self._reconnect()
 			else:
 				self.time_to_reconnect = None
-
-	def request_search_fields(self, jid):
-		iq = common.xmpp.Iq(typ = 'get', to = jid, queryNS = \
-			common.xmpp.NS_SEARCH)
-		self.connection.send(iq)
-
-	def send_search_form(self, jid, form, is_form):
-		iq = common.xmpp.Iq(typ = 'set', to = jid, queryNS = \
-			common.xmpp.NS_SEARCH)
-		item = iq.getTag('query')
-		if is_form:
-			item.addChild(node = form)
-		else:
-			for i in form.keys():
-				item.setTagData(i,form[i])
-		def _on_response(resp):
-			jid = jid = helpers.get_jid_from_iq(resp)
-			tag = resp.getTag('query', namespace = common.xmpp.NS_SEARCH)
-			if not tag:
-				self.dispatch('SEARCH_RESULT', (jid, None, False))
-				return
-			df = tag.getTag('x', namespace = common.xmpp.NS_DATA)
-			if df:
-				self.dispatch('SEARCH_RESULT', (jid, df, True))
-				return
-			df = []
-			for item in tag.getTags('item'):
-				# We also show attributes. jid is there
-				f = item.attrs
-				for i in item.getPayload():
-					f[i.getName()] = i.getData()
-				df.append(f)
-			self.dispatch('SEARCH_RESULT', (jid, df, False))
-
-		self.connection.SendAndCallForResponse(iq, _on_response)
 
 # END Connection

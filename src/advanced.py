@@ -1,22 +1,17 @@
 ##	advanced.py
 ##
-## Copyright (C) 2005-2006 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2005-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005 Vincent Hanquez <tab@snarc.org>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import gtk
@@ -77,7 +72,8 @@ class AdvancedConfigurationWindow(object):
 			renderer_text, text = 1)
 		col.set_cell_data_func(renderer_text, self.cb_value_column_data)
 
-		col.props.resizable = True
+		if gtk.gtk_version >= (2, 8, 0) and gtk.pygtk_version >= (2, 8, 0):
+			col.set_resizable(True) # there is a bug in 2.6.x series
 		col.set_max_width(250)
 
 		renderer_text = gtk.CellRendererText()
@@ -103,7 +99,8 @@ class AdvancedConfigurationWindow(object):
 		make the cellrenderertext not editable else it's editable'''
 		optname = model[iter][C_PREFNAME]
 		opttype = model[iter][C_TYPE]
-		if opttype == self.types['boolean'] or optname == 'password':
+		if opttype == self.types['boolean'] or optname in ('password', 
+			'gpgpassword'):
 			cell.set_property('editable', False)
 		else:
 			cell.set_property('editable', True)
@@ -238,7 +235,7 @@ class AdvancedConfigurationWindow(object):
 			type = val[OPT_TYPE][0]
 			type = self.types[type] # i18n
 		value = val[OPT_VAL]
-		if name == 'password':
+		if name in ('password', 'gpgpassword'):
 			#we talk about password
 			value = _('Hidden') # override passwords with this string
 		if value in self.right_true_dict:

@@ -1,19 +1,14 @@
 ##
 ## Copyright (C) 2006 Gajim Team
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import xmpp
@@ -167,7 +162,7 @@ def find_current_groupchats(account):
 
 class LeaveGroupchatsCommand(AdHocCommand):
 	commandnode = 'leave-groupchats'
-	commandname = _('Leave Groupchats')
+	commandname = 'Leave Groupchats'
 
 	@staticmethod
 	def isVisibleFor(samejid):
@@ -232,7 +227,7 @@ class LeaveGroupchatsCommand(AdHocCommand):
 			self.badRequest(request)
 			return False
 		response, cmd = self.buildResponse(request, status = 'completed')
-		note = _('You left the following groupchats:')
+		note = _('You leaved the following groupchats:')
 		for room_jid in gc:
 			note += '\n\t' + room_jid
 		cmd.addChild('note', {}, note)
@@ -241,42 +236,12 @@ class LeaveGroupchatsCommand(AdHocCommand):
 		return False
 
 
-class ForwardMessagesCommand(AdHocCommand):
-	# http://www.xmpp.org/extensions/xep-0146.html#forward
-	commandnode = 'forward-messages'
-	commandname = _('Forward unread messages')
-
-	@staticmethod
-	def isVisibleFor(samejid):
-		''' Change status is visible only if the entity has the same bare jid. '''
-		return samejid
-
-	def execute(self, request):
-		account = self.connection.name
-		# Forward messages
-		events = gajim.events.get_events(account, types=['chat', 'normal'])
-		j, resource = gajim.get_room_and_nick_from_fjid(self.jid)
-		for jid in events:
-			for event in events[jid]:
-				self.connection.send_message(j, event.parameters[0], '',
-					type=event.type_, subject=event.parameters[1],
-					resource=resource, forward_from=jid)
-
-		# Inform other client of completion
-		response, cmd = self.buildResponse(request, status = 'completed')
-		cmd.addChild('note', {}, _('All unread messages have been forwarded.'))
-
-		self.connection.connection.send(response)
-
-		return False	# finish the session
-
 class ConnectionCommands:
 	''' This class depends on that it is a part of Connection() class. '''
 	def __init__(self):
 		# a list of all commands exposed: node -> command class
 		self.__commands = {}
-		for cmdobj in (ChangeStatusCommand, ForwardMessagesCommand,
-		LeaveGroupchatsCommand):
+		for cmdobj in (ChangeStatusCommand, LeaveGroupchatsCommand):
 			self.__commands[cmdobj.commandnode] = cmdobj
 
 		# a list of sessions; keys are tuples (jid, sessionid, node)
@@ -306,8 +271,8 @@ class ConnectionCommands:
 
 		self.connection.send(iq)
 
-	def commandInfoQuery(self, con, iq_obj):
-		''' Send disco#info result for query for command (JEP-0050, example 6.).
+	def commandQuery(self, con, iq_obj):
+		''' Send disco result for query for command (JEP-0050, example 6.).
 		Return True if the result was sent, False if not. '''
 		jid = helpers.get_full_jid_from_iq(iq_obj)
 		node = iq_obj.getTagAttr('query', 'node')
@@ -325,22 +290,6 @@ class ConnectionCommands:
 			for feature in cmd.commandfeatures:
 				q.addChild('feature', attrs = {'var': feature})
 
-			self.connection.send(iq)
-			return True
-
-		return False
-
-	def commandItemsQuery(self, con, iq_obj):
-		''' Send disco#items result for query for command.
-		Return True if the result was sent, False if not. '''
-		jid = helpers.get_full_jid_from_iq(iq_obj)
-		node = iq_obj.getTagAttr('query', 'node')
-
-		if node not in self.__commands: return False
-
-		cmd = self.__commands[node]
-		if cmd.isVisibleFor(self.isSameJID(jid)):
-			iq = iq_obj.buildReply('result')
 			self.connection.send(iq)
 			return True
 

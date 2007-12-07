@@ -1,15 +1,15 @@
 ##	common/zeroconf/connection_zeroconf.py
 ##
 ## Contributors for this file:
-##	- Yann Leboulanger <asterix@lagaule.org>
+##	- Yann Le Boulanger <asterix@lagaule.org>
 ##	- Nikos Kouremenos <nkour@jabber.org>
 ##	- Dimitur Kirov <dkirov@gmail.com>
 ##	- Travis Shirk <travis@pobox.com>
 ##  - Stefan Bethge <stefan@lanpartei.de>
 ##
-## Copyright (C) 2003-2004 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2004 Yann Le Boulanger <asterix@lagaule.org>
 ##                         Vincent Hanquez <tab@snarc.org>
-## Copyright (C) 2006 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2006 Yann Le Boulanger <asterix@lagaule.org>
 ##                    Vincent Hanquez <tab@snarc.org>
 ##                    Nikos Kouremenos <nkour@jabber.org>
 ##                    Dimitur Kirov <dkirov@gmail.com>
@@ -17,19 +17,14 @@
 ##                    Norman Rasmussen <norman@rasmussen.co.za>
 ##                    Stefan Bethge <stefan@lanpartei.de>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 
@@ -46,7 +41,6 @@ import gobject
 from common import gajim
 from common import GnuPG
 from common.zeroconf import client_zeroconf
-from common.zeroconf import zeroconf
 from connection_handlers_zeroconf import *
 
 USE_GPG = GnuPG.USE_GPG
@@ -62,12 +56,8 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 		self.connected = 0 # offline
 		self.connection = None
 		self.gpg = None
-		if USE_GPG:
-			self.gpg = GnuPG.GnuPG(gajim.config.get('use_gpg_agent'))
 		self.is_zeroconf = True
 		self.privacy_rules_supported = False
-		self.blocked_contacts = []
-		self.blocked_groups = []
 		self.status = ''
 		self.old_show = ''
 		self.priority = 0
@@ -85,11 +75,13 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 		self.sync_with_global_status = True
 		self.no_log_for = False
 
-		self.pep_supported = False
 		# Do we continue connection when we get roster (send presence,get vcard...)
 		self.continue_connect_info = None
 		if USE_GPG:
-			self.gpg = GnuPG.GnuPG(gajim.config.get('use_gpg_agent'))
+			self.gpg = GnuPG.GnuPG()
+			gajim.config.set('usegpg', True)
+		else:
+			gajim.config.set('usegpg', False)
 		
 		self.get_config_values_or_default()
 		
@@ -140,8 +132,7 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 		gajim.log.debug('reconnect')
 
 #		signed = self.get_signed_msg(self.status)
-		self.disconnect()
-		self.change_status(self.old_show, self.status)
+		self.connect(self.old_show, self.status)
 
 	def quit(self, kill_core):
 		if kill_core and self.connected > 1:
@@ -235,7 +226,7 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 		self.get_config_values_or_default()
 		if not self.connection:
 			self.connection = client_zeroconf.ClientZeroconf(self)
-			if not zeroconf.test_zeroconf():
+			if not self.connection.test_avahi():
 				self.dispatch('STATUS', 'offline')
 				self.status = 'offline'
 				self.dispatch('CONNECTION_LOST',
@@ -320,7 +311,6 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 				check = self.connection.announce()
 			else:
 				self.connected = STATUS_LIST.index(show)
-			self.dispatch('SIGNED_IN', ())
 
 		# 'disconnect'
 		elif show == 'offline' and self.connected:
@@ -356,7 +346,7 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 
 	def send_message(self, jid, msg, keyID, type = 'chat', subject='',
 	chatstate = None, msg_id = None, composing_xep = None, resource = None, 
-	user_nick = None, session=None):
+	user_nick = None):
 		fjid = jid
 
 		if not self.connection:
@@ -417,20 +407,12 @@ class ConnectionZeroconf(ConnectionHandlersZeroconf):
 				if chatstate is 'composing' or msgtxt: 
 					chatstate_node.addChild(name = 'composing') 
 
-		if session:
-			session.last_send = time.time()
-			msg_iq.setThread(session.thread_id)
-
-			if session.enable_encryption:
-				msg_iq = session.encrypt_stanza(msg_iq)
-
 		if not self.connection.send(msg_iq, msg != None):
 			return
 
 		no_log_for = gajim.config.get_per('accounts', self.name, 'no_log_for')
 		ji = gajim.get_jid_without_resource(jid)
-		if session.is_loggable() and self.name not in no_log_for and\
-		ji not in no_log_for:
+		if self.name not in no_log_for and ji not in no_log_for:
 			log_msg = msg
 			if subject:
 				log_msg = _('Subject: %s\n%s') % (subject, msg)

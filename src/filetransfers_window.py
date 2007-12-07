@@ -1,25 +1,20 @@
 ##	filetransfers_window.py
 ##
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
-## Copyright (C) 2005-2007 Nikos Kouremenos <kourem@gmail.com>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
+## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005
 ##                    Dimitur Kirov <dkirov@gmail.com>
 ##                    Travis Shirk <travis@pobox.com>
 ## Copyright (C) 2004-2005 Vincent Hanquez <tab@snarc.org>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import gtk
@@ -121,6 +116,8 @@ class FileTransfersWindow:
 		self.cancel_menuitem = self.xml.get_widget('cancel_menuitem')
 		self.pause_menuitem = self.xml.get_widget('pause_menuitem')
 		self.continue_menuitem = self.xml.get_widget('continue_menuitem')
+		self.continue_menuitem.hide()
+		self.continue_menuitem.set_no_show_all(True)
 		self.remove_menuitem = self.xml.get_widget('remove_menuitem')
 		self.xml.signal_autoconnect(self)
 
@@ -133,7 +130,7 @@ class FileTransfersWindow:
 			if file_props['tt_account'] == account:
 				receiver_jid = unicode(file_props['receiver']).split('/')[0]
 				if jid == receiver_jid:
-					if not self.is_transfer_stopped(file_props):
+					if not self.is_transfer_stoped(file_props):
 						active_transfers[0].append(file_props)
 
 		# 'account' is the recipient
@@ -141,7 +138,7 @@ class FileTransfersWindow:
 			if file_props['tt_account'] == account:
 				sender_jid = unicode(file_props['sender']).split('/')[0]
 				if jid == sender_jid:
-					if not self.is_transfer_stopped(file_props):
+					if not self.is_transfer_stoped(file_props):
 						active_transfers[1].append(file_props)
 		return active_transfers
 
@@ -224,17 +221,13 @@ _('Connection with peer cannot be established.'))
 		self.tree.get_selection().unselect_all()
 
 	def show_file_send_request(self, account, contact):
-	
-		desc_entry = gtk.Entry()
-	
 		def on_ok(widget):
 			file_dir = None
 			files_path_list = dialog.get_filenames()
 			files_path_list = gtkgui_helpers.decode_filechooser_file_paths(
 				files_path_list)
-			desc = desc_entry.get_text()
 			for file_path in files_path_list:
-				if self.send_file(account, contact, file_path, desc) and file_dir is None:
+				if self.send_file(account, contact, file_path) and file_dir is None:
 					file_dir = os.path.dirname(file_path)
 			if file_dir:
 				gajim.config.set('last_send_dir', file_dir)
@@ -254,17 +247,9 @@ _('Connection with peer cannot be established.'))
 		# FIXME: add send icon to this button (JUMP_TO)
 		dialog.add_action_widget(btn, gtk.RESPONSE_OK)
 		dialog.set_default_response(gtk.RESPONSE_OK)
-		
-		desc_hbox = gtk.HBox(False, 5)
-		desc_hbox.pack_start(gtk.Label(_('Description: ')),False,False,0)
-		desc_hbox.pack_start(desc_entry,True,True,0)
-		
-		dialog.vbox.pack_start(desc_hbox, False, False, 0)
-		
 		btn.show()
-		desc_hbox.show_all()
 
-	def send_file(self, account, contact, file_path, file_desc=''):
+	def send_file(self, account, contact, file_path):
 		''' start the real transfer(upload) of the file '''
 		if gtkgui_helpers.file_is_locked(file_path):
 			pritext = _('Gajim cannot access this file')
@@ -280,7 +265,7 @@ _('Connection with peer cannot be established.'))
 				resource = resource)
 		(file_dir, file_name) = os.path.split(file_path)
 		file_props = self.get_send_file_props(account, contact, 
-				file_path, file_name, file_desc)
+				file_path, file_name)
 		if file_props is None:
 			return False
 		self.add_transfer(account, contact, file_props)
@@ -311,7 +296,8 @@ _('Connection with peer cannot be established.'))
 		prim_text = _('%s wants to send you a file:') % contact.jid
 		dialog, dialog2 = None, None
 
-		def on_response_ok(account, contact, file_props):
+		def on_response_ok(widget, account, contact, file_props):
+			dialog.destroy()
 
 			def on_ok(widget, account, contact, file_props):
 				file_path = dialog2.get_filename()
@@ -366,7 +352,8 @@ _('Connection with peer cannot be established.'))
 			dialog2.connect('delete-event', lambda widget, event:
 				on_cancel(widget, account, contact, file_props))
 
-		def on_response_cancel(account, file_props):
+		def on_response_cancel(widget, account, file_props):
+			dialog.destroy()
 			gajim.connections[account].send_file_rejection(file_props)
 
 		dialog = dialogs.NonModalConfirmationDialog(prim_text, sec_text,
@@ -435,18 +422,10 @@ _('Connection with peer cannot be established.'))
 		#they are not translatable.
 		return _('%(hours)02.d:%(minutes)02.d:%(seconds)02.d')  % times
 
-	def _get_eta_and_speed(self, full_size, transfered_size, file_props):
-		if len(file_props['transfered_size']) == 0:
+	def _get_eta_and_speed(self, full_size, transfered_size, elapsed_time):
+		if elapsed_time == 0:
 			return 0., 0.
-		elif len(file_props['transfered_size']) == 1:
-			speed = round(float(transfered_size) / file_props['elapsed-time'])
-		else:
-			# first and last are (time, transfered_size)
-			first = file_props['transfered_size'][0]
-			last = file_props['transfered_size'][-1]
-			transfered = last[1] - first[1]
-			tim = last[0] - first[0]
-			speed = round(float(transfered) / tim)
+		speed = round(float(transfered_size) / elapsed_time)
 		if speed == 0.:
 			return 0., 0.
 		remaining_size = full_size - transfered_size
@@ -488,7 +467,7 @@ _('Connection with peer cannot be established.'))
 		if full_size == 0:
 			percent = 0
 		else:
-			percent = round(float(transfered_size) / full_size * 100, 1)
+			percent = round(float(transfered_size) / full_size * 100)
 		if iter is None:
 			iter = self.get_iter_by_sid(typ, sid)
 		if iter is not None:
@@ -507,13 +486,8 @@ _('Connection with peer cannot be established.'))
 			if file_props.has_key('offset') and file_props['offset']:
 				transfered_size -= file_props['offset'] 
 				full_size -= file_props['offset']
-
-			if file_props['elapsed-time'] > 0:
-				file_props['transfered_size'].append((file_props['last-time'], transfered_size))
-			if len(file_props['transfered_size']) > 6:
-				file_props['transfered_size'].pop(0)
 			eta, speed = self._get_eta_and_speed(full_size, transfered_size, 
-				file_props)
+				file_props['elapsed-time'])
 
 			self.model.set(iter, C_PROGRESS, text)
 			self.model.set(iter, C_PERCENT, int(percent))
@@ -553,12 +527,11 @@ _('Connection with peer cannot be established.'))
 				return iter
 			iter = self.model.iter_next(iter)
 
-	def get_send_file_props(self, account, contact, file_path, file_name,
-	file_desc=''):
+	def get_send_file_props(self, account, contact, file_path, file_name):
 		''' create new file_props dict and set initial file transfer 
 		properties in it'''
 		file_props = {'file-name' : file_path, 'name' : file_name, 
-			'type' : 's', 'desc' : file_desc}
+			'type' : 's'}
 		if os.path.isfile(file_path):
 			stat = os.stat(file_path)
 		else:
@@ -576,8 +549,6 @@ _('Connection with peer cannot be established.'))
 		file_props['sender'] = account
 		file_props['receiver'] = contact
 		file_props['tt_account'] = account
-		# keep the last time: transfered_size to compute transfer speed
-		file_props['transfered_size'] = []
 		return file_props
 
 	def add_transfer(self, account, contact, file_props):
@@ -598,7 +569,7 @@ _('Connection with peer cannot be established.'))
 			(file_path, file_name) = os.path.split(file_props['file-name'])
 		else:
 			file_name = file_props['name']
-		text_props = gobject.markup_escape_text(file_name) + '\n'
+		text_props = gtkgui_helpers.escape_for_pango_markup(file_name) + '\n'
 		text_props += contact.get_shown_name()
 		self.model.set(iter, 1, text_labels, 2, text_props, C_SID,
 			file_props['type'] + file_props['sid'])
@@ -674,7 +645,7 @@ _('Connection with peer cannot be established.'))
 			return True
 		return not file_props['paused']
 
-	def is_transfer_stopped(self, file_props):
+	def is_transfer_stoped(self, file_props):
 		if file_props.has_key('error') and file_props['error'] != 0:
 			return True
 		if file_props.has_key('completed') and file_props['completed']:
@@ -716,7 +687,7 @@ _('Connection with peer cannot be established.'))
 		self.remove_menuitem.set_sensitive(is_row_selected)
 		self.open_folder_menuitem.set_sensitive(is_row_selected)
 		is_stopped = False
-		if self.is_transfer_stopped(file_props):
+		if self.is_transfer_stoped(file_props):
 			is_stopped = True
 		self.cancel_button.set_sensitive(not is_stopped)
 		self.cancel_menuitem.set_sensitive(not is_stopped)
@@ -770,7 +741,7 @@ _('Connection with peer cannot be established.'))
 			iter = self.model.get_iter((i))
 			sid = self.model[iter][C_SID].decode('utf-8')
 			file_props = self.files_props[sid[0]][sid[1:]]
-			if self.is_transfer_stopped(file_props):
+			if self.is_transfer_stoped(file_props):
 				self._remove_transfer(iter, sid, file_props)
 			i -= 1
 		self.tree.get_selection().unselect_all()
@@ -815,8 +786,6 @@ _('Connection with peer cannot be established.'))
 		elif self.is_transfer_active(file_props):
 			file_props['paused'] = True
 			self.set_status(file_props['type'], file_props['sid'], 'pause')
-			# reset that to compute speed only when we resume
-			file_props['transfered_size'] = []
 			self.toggle_pause_continue(False)
 
 	def on_cancel_button_clicked(self, widget):

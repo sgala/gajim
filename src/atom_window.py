@@ -1,30 +1,8 @@
-##	atom_window.py - a window to display atom entries from pubsub.
-##
-## For now greatly simplified, supports only simple feeds like the
-## one from pubsub.com.
-##
-## Copyright (C) 2006-2007 Yann Leboulanger <asterix@lagaule.org>
-## Copyright (C) 2007 Nikos Kouremenos <kourem@gmail.com>
-## Copyright (C) 2006-2007 Liori (I think) put ur self here please
-##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
-## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
-##
-## Gajim is distributed in the hope that it will be useful,
-## but WITHOUT ANY WARRANTY; without even the implied warranty of
-## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
-##
-
+'''atom_window.py - a window to display atom entries from pubsub. For now greatly simplified,
+supports only simple feeds like the one from pubsub.com. '''
 
 import gtk
-import gobject
+import gtk.gdk
 
 import gtkgui_helpers
 from common import helpers
@@ -33,7 +11,7 @@ class AtomWindow:
 	window = None
 	entries = []
 
-	@classmethod
+	@classmethod				# python2.4 decorator
 	def newAtomEntry(cls, entry):
 		''' Queue new entry, open window if there's no one opened. '''
 		cls.entries.append(entry)
@@ -74,22 +52,22 @@ class AtomWindow:
 		if newentry.feed_link is not None:
 			self.feed_title_label.set_markup(
 				u'<span foreground="blue" underline="single">%s</span>' % \
-				gobject.markup_escape_text(newentry.feed_title))
+				gtkgui_helpers.escape_for_pango_markup(newentry.feed_title))
 		else:
 			self.feed_title_label.set_markup(
-				gobject.markup_escape_text(newentry.feed_title))
+				gtkgui_helpers.escape_for_pango_markup(newentry.feed_title))
 
 		self.feed_tagline_label.set_markup(
 			u'<small>%s</small>' % \
-			gobject.markup_escape_text(newentry.feed_tagline))
+			gtkgui_helpers.escape_for_pango_markup(newentry.feed_tagline))
 
 		if newentry.uri is not None:
 			self.entry_title_label.set_markup(
 				u'<span foreground="blue" underline="single">%s</span>' % \
-				gobject.markup_escape_text(newentry.title))
+				gtkgui_helpers.escape_for_pango_markup(newentry.title))
 		else:
 			self.entry_title_label.set_markup(
-				gobject.markup_escape_text(newentry.title))
+				gtkgui_helpers.escape_for_pango_markup(newentry.title))
 
 		self.last_modified_label.set_text(newentry.updated)
 
@@ -119,7 +97,7 @@ class AtomWindow:
 		self.displayNextEntry()
 
 	def on_entry_title_button_press_event(self, widget, event):
-		#FIXME: make it using special gtk2.10 widget
+		# TODO: make it using special gtk2.10 widget
 		if event.button == 1:	# left click
 			uri = self.entry.uri
 			if uri is not None:
@@ -127,7 +105,7 @@ class AtomWindow:
 		return True
 
 	def on_feed_title_button_press_event(self, widget, event):
-		#FIXME: make it using special gtk2.10 widget
+		# TODO: make it using special gtk2.10 widget
 		if event.button == 1:	# left click
 			uri = self.entry.feed_uri
 			if uri is not None:

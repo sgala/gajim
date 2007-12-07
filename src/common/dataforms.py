@@ -76,9 +76,7 @@ def ExtendForm(node):
 		return SimpleDataForm(extend=node)
 
 class DataField(ExtendedNode):
-	""" Keeps data about one field - var, field type, labels, instructions...
-	Base class for different kinds of fields. Use Field() function to
-	construct one of these. """
+	""" Keeps data about one field - var, field type, labels, instructions... """
 	def __init__(self, typ=None, var=None, value=None, label=None, desc=None, required=False,
 		options=None, extend=None):
 

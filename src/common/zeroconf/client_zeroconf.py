@@ -3,19 +3,14 @@
 ## Copyright (C) 2006 Stefan Bethge <stefan@lanpartei.de>
 ## 				2006 Dimitur Kirov <dkirov@gmail.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 from common import gajim
 import common.xmpp
@@ -408,6 +403,7 @@ class P2PConnection(IdleObject, PlugIn):
 		except Exception, e:
 			if len(e.args)  > 0 and isinstance(e.args[0], int):
 				errnum = e[0]
+			sys.exc_clear()
 			# "received" will be empty anyhow 
 		if errnum == socket.SSL_ERROR_WANT_READ:
 			pass
@@ -487,6 +483,7 @@ class P2PConnection(IdleObject, PlugIn):
 				self._on_send()
 
 		except socket.error, e:
+			sys.exc_clear()
 			if e[0] == socket.SSL_ERROR_WANT_WRITE:
 				return True		
 			if self.state < 0:
@@ -536,6 +533,13 @@ class ClientZeroconf:
 		self.hash_to_port = {}
 		self.listener = None
 		self.number_of_awaiting_messages = {}
+
+	def test_avahi(self):
+		try:
+			import avahi
+		except ImportError:
+			return False
+		return True
 
 	def connect(self, show, msg):
 		self.port = self.start_listener(self.caller.port)

@@ -1,23 +1,18 @@
 # -*- coding: utf-8 -*-
 ##	config.py
 ##
-## Copyright (C) 2005-2006 Yann Leboulanger <asterix@lagaule.org>
-## Copyright (C) 2005-2007 Nikos Kouremenos <kourem@gmail.com>
+## Copyright (C) 2005-2006 Yann Le Boulanger <asterix@lagaule.org>
+## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005-2006 Stéphan Kochen <stephan@kochen.nl>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 # The appearance of the treeview, and parts of the dialog, are controlled by
@@ -46,7 +41,6 @@ import inspect
 import weakref
 import gobject
 import gtk
-import gobject
 import pango
 
 import dialogs
@@ -54,7 +48,6 @@ import tooltips
 import gtkgui_helpers
 import groups
 import adhoc_commands
-import search_window
 
 from common import gajim
 from common import xmpp
@@ -82,7 +75,7 @@ def _gen_agent_type_info():
 		('_jid', 'weather'):			(False, 'weather.png'),
 		('gateway', 'sip'):			(False, 'sip.png'),
 		('directory', 'user'):		(None, 'jud.png'),
-		('pubsub', 'generic'):		(PubSubBrowser, 'pubsub.png'),
+		('pubsub', 'generic'):		(None, 'pubsub.png'),
 		('pubsub', 'service'):		(PubSubBrowser, 'pubsub.png'),
 		('proxy', 'bytestreams'):	(None, 'bytestreams.png'), # Socks5 FT proxy
 		('headline', 'newmail'):	(ToplevelAgentBrowser, 'mail.png'),
@@ -445,12 +438,17 @@ _('Without a connection, you can not browse available services'))
 			self.on_services_treeview_selection_changed)
 		self.services_scrollwin = self.xml.get_widget('services_scrollwin')
 		self.progressbar = self.xml.get_widget('services_progressbar')
+		self.progressbar.set_no_show_all(True)
+		self.progressbar.hide()
 		self.banner = self.xml.get_widget('banner_agent_label')
 		self.banner_icon = self.xml.get_widget('banner_agent_icon')
 		self.banner_eventbox = self.xml.get_widget('banner_agent_eventbox')
 		self.style_event_id = 0
 		self.banner.realize()
 		self.paint_banner()
+		self.filter_hbox = self.xml.get_widget('filter_hbox')
+		self.filter_hbox.set_no_show_all(True)
+		self.filter_hbox.hide()
 		self.action_buttonbox = self.xml.get_widget('action_buttonbox')
 
 		# Address combobox
@@ -502,7 +500,10 @@ _('Without a connection, you can not browse available services'))
 		title_text = _('Service Discovery using account %s') % self.account
 		self.window.set_title(title_text)
 		self._set_window_banner_text(_('Service Discovery'))
-		self.banner_icon.clear()
+		if gtk.gtk_version >= (2, 8, 0) and gtk.pygtk_version >= (2, 8, 0):
+			self.banner_icon.clear()
+		else:
+			self.banner_icon.set_from_file(None)
 		self.banner_icon.hide() # Just clearing it doesn't work
 
 	def _set_window_banner_text(self, text, text_after = None):
@@ -992,7 +993,6 @@ class ToplevelAgentBrowser(AgentBrowser):
 		self.register_button = None
 		self.join_button = None
 		self.execute_button = None
-		self.search_button = None
 		# Keep track of our treeview signals
 		self._view_signals = []
 		self._scroll_signal = None
@@ -1149,7 +1149,7 @@ class ToplevelAgentBrowser(AgentBrowser):
 		AgentBrowser._add_actions(self)
 		self.execute_button = gtk.Button()
 		image = gtk.image_new_from_stock(gtk.STOCK_EXECUTE, gtk.ICON_SIZE_BUTTON)
-		label = gtk.Label(_('_Execute Command'))
+		label = gtk.Label(_('_Execute Command...'))
 		label.set_use_underline(True)
 		hbox = gtk.HBox()
 		hbox.pack_start(image, False, True, 6)
@@ -1177,18 +1177,6 @@ class ToplevelAgentBrowser(AgentBrowser):
 		self.window.action_buttonbox.add(self.join_button)
 		self.join_button.show_all()
 
-		self.search_button = gtk.Button()
-		image = gtk.image_new_from_stock(gtk.STOCK_FIND, gtk.ICON_SIZE_BUTTON)
-		label = gtk.Label(_('_Search'))
-		label.set_use_underline(True)
-		hbox = gtk.HBox()
-		hbox.pack_start(image, False, True, 6)
-		hbox.pack_end(label, True, True)
-		self.search_button.add(hbox)
-		self.search_button.connect('clicked', self.on_search_button_clicked)
-		self.window.action_buttonbox.add(self.search_button)
-		self.search_button.show_all()
-
 	def _clean_actions(self):
 		if self.execute_button:
 			self.execute_button.destroy()
@@ -1199,23 +1187,7 @@ class ToplevelAgentBrowser(AgentBrowser):
 		if self.join_button:
 			self.join_button.destroy()
 			self.join_button = None
-		if self.search_button:
-			self.search_button.destroy()
-			self.search_button = None
 		AgentBrowser._clean_actions(self)
-
-	def on_search_button_clicked(self, widget = None):
-		'''When we want to search something:
-		open search window'''
-		model, iter = self.window.services_treeview.get_selection().get_selected()
-		if not iter:
-			return
-		service = model[iter][0].decode('utf-8')
-		if gajim.interface.instances[self.account]['search'].has_key(service):
-			gajim.interface.instances[self.account]['search'][service].present()
-		else:
-			gajim.interface.instances[self.account]['search'][service] = \
-				search_window.SearchWindow(self.account, service)
 
 	def cleanup(self):
 		self.tooltip.hide_tooltip()
@@ -1274,9 +1246,6 @@ class ToplevelAgentBrowser(AgentBrowser):
 			self.browse_button.set_sensitive(False)
 		if self.join_button:
 			self.join_button.set_sensitive(False)
-		if self.search_button:
-			self.search_button.set_sensitive(False)
-		model, iter = self.window.services_treeview.get_selection().get_selected()
 		model, iter = self.window.services_treeview.get_selection().get_selected()
 		if not iter:
 			return
@@ -1309,8 +1278,6 @@ class ToplevelAgentBrowser(AgentBrowser):
 		AgentBrowser._update_actions(self, jid, node, identities, features, data)
 		if self.execute_button and xmpp.NS_COMMANDS in features:
 			self.execute_button.set_sensitive(True)
-		if self.search_button and xmpp.NS_SEARCH in features:
-			self.search_button.set_sensitive(True)
 		if self.register_button and xmpp.NS_REGISTER in features:
 			# We can register this agent
 			registered_transports = []
@@ -1769,9 +1736,8 @@ class DiscussionGroupsBrowser(AgentBrowser):
 	def _create_treemodel(self):
 		''' Create treemodel for the window. '''
 		# JID, node, name (with description) - pango markup, dont have info?, subscribed?
-		self.model = gtk.TreeStore(str, str, str, bool, bool)
-		# sort by name
-		self.model.set_sort_column_id(2, gtk.SORT_ASCENDING)
+		self.model = gtk.ListStore(str, str, str, bool, bool)
+		self.model.set_sort_column_id(3, gtk.SORT_ASCENDING)
 		self.window.services_treeview.set_model(self.model)
 
 		# Name column
@@ -1793,29 +1759,7 @@ class DiscussionGroupsBrowser(AgentBrowser):
 		col.set_resizable(False)
 		self.window.services_treeview.insert_column(col, -1)
 
-		# Node Column
-		renderer = gtk.CellRendererText()
-		col = gtk.TreeViewColumn(_('Node'))
-		col.pack_start(renderer)
-		col.set_attributes(renderer, markup=1)
-		col.set_resizable(True)
-		self.window.services_treeview.insert_column(col, -1)
-
-	def _add_items(self, jid, node, items, force):
-		for item in items:
-			jid = item['jid']
-			node = item.get('node', '')
-			self._total_items += 1
-			self._add_item(jid, node, item, force)
-
-	def _in_list_foreach(self, model, path, iter, node):
-		if model[path][1] == node:
-			self.in_list = True
-
-	def _in_list(self, node):
-		self.in_list = False
-		self.model.foreach(self._in_list_foreach, node)
-		return self.in_list
+		self.window.services_treeview.set_headers_visible(True)
 
 	def _add_item(self, jid, node, item, force):
 		''' Called when we got basic information about new node from query.
@@ -1829,27 +1773,10 @@ class DiscussionGroupsBrowser(AgentBrowser):
 			dunno = True
 			subscribed = False
 
-		name = gobject.markup_escape_text(name)
+		name = gtkgui_helpers.escape_for_pango_markup(name)
 		name = '<b>%s</b>' % name
 
-		node_splitted = node.split('/')
-		parent_iter = None
-		while len(node_splitted) > 1:
-			parent_node = node_splitted.pop(0)
-			parent_iter = self._get_child_iter(parent_iter, parent_node)
-			node_splitted[0] = parent_node + '/' + node_splitted[0]
-		if not self._in_list(node):
-			self.model.append(parent_iter, (jid, node, name, dunno, subscribed))
-			self.cache.get_items(jid, node, self._add_items, force = force,
-				args = (force,))
-
-	def _get_child_iter(self, parent_iter, node):
-		child_iter = self.model.iter_children(parent_iter)
-		while child_iter:
-			if self.model[child_iter][1] == node:
-				return child_iter
-			child_iter = self.model.iter_next(child_iter)
-		return None
+		self.model.append((jid, node, name, dunno, subscribed))
 
 	def _add_actions(self):
 		self.post_button = gtk.Button(label=_('New post'), use_underline=True)

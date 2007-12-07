@@ -48,16 +48,6 @@ MAINTAINERCLEANFILES = \
 	compile \
 	depcomp \
 	config.guess \
-	config.log \
 	config.sub \
-	config.status \
 	aclocal.m4 \
-	libtool \
-	po/POTFILES.in \
-	src/trayicon_la-eggtrayicon.loT \
-	m4/intltool.m4
-
-MAINTAINERCLEANDIRS = \
-	autom4te.cache \
-	build \
-	dist
+	libtool

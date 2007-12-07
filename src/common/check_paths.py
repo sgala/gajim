@@ -1,21 +1,16 @@
 ##
-## Copyright (C) 2005-2006 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2005-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005-2006 Travis Shirk <travis@pobox.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import os
@@ -47,7 +42,6 @@ def create_log_db():
 	# logs.jid_id --> jids.jid_id but Sqlite doesn't do FK etc so it's done in python code
 	# jids.jid text column will be JID if TC-related, room_jid if GC-related,
 	# ROOM_JID/nick if pm-related.
-	# also check optparser.py, which updates databases on gajim updates
 	cur.executescript(
 		'''
 		CREATE TABLE jids(
@@ -80,12 +74,6 @@ def create_log_db():
 		);
 		
 		CREATE INDEX idx_logs_jid_id_kind ON logs (jid_id, kind);
-
-		CREATE TABLE caps_cache (
-			node TEXT,
-			ver TEXT,
-			ext TEXT,
-			data BLOB);
 		'''
 		)
 
@@ -127,7 +115,7 @@ def check_and_possibly_create_paths():
 			print _('%s is a directory but should be a file') % LOG_DB_PATH
 			print _('Gajim will now exit')
 			sys.exit()
-		
+
 	else: # dot_gajim doesn't exist
 		if dot_gajim: # is '' on win9x so avoid that
 			create_path(dot_gajim)

@@ -1,7 +1,6 @@
 ##   features.py 
 ##
 ##   Copyright (C) 2003-2004 Alexey "Snake" Nezhdanov
-##   Copyright (C) 2007 Julien Pivotto <roidelapluie@gmail.com>
 ##
 ##   This program is free software; you can redistribute it and/or modify
 ##   it under the terms of the GNU General Public License as published by
@@ -72,7 +71,6 @@ def discoverItems(disp,jid,node=None, cb=None):
 			cb(ret)
 	_discover(disp, NS_DISCO_ITEMS, jid, node, _on_response)
 
-# this one is
 def discoverInfo(disp,jid,node=None, cb=None):
 	""" Query remote object about info that it publishes. Returns identities and features lists."""
 	""" According to JEP-0030:
@@ -142,6 +140,7 @@ def _ReceivedRegInfo(con, resp, agent):
 def register(disp, host, info, cb):
 	""" Perform registration on remote server with provided info.
 		disp must be connected dispatcher instance.
+		Returns true or false depending on registration result.
 		If registration fails you can get additional info from the dispatcher's owner
 		attributes lastErrNode, lastErr and lastErrCode.
 	"""

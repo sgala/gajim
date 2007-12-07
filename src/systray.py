@@ -1,26 +1,20 @@
 ##	systray.py
 ##
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2003-2004 Vincent Hanquez <tab@snarc.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005 Dimitur Kirov <dkirov@gmail.com>
 ## Copyright (C) 2005-2006 Travis Shirk <travis@pobox.com>
 ## Copyright (C) 2005 Norman Rasmussen <norman@rasmussen.co.za>
-## Copyright (C) 2007 Lukas Petrovicky <lukas@petrovicky.net>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import gtk
@@ -65,30 +59,11 @@ class Systray:
 		self.xml.signal_autoconnect(self)
 		self.popup_menus = []
 
-	def subscribe_events(self):
-		'''Register listeners to the events class'''
-		gajim.events.event_added_subscribe(self.on_event_added)
-		gajim.events.event_removed_subscribe(self.on_event_removed)
-
-	def unsubscribe_events(self):
-		'''Unregister listeners to the events class'''
-		gajim.events.event_added_unsubscribe(self.on_event_added)
-		gajim.events.event_removed_unsubscribe(self.on_event_removed)
-
-	def on_event_added(self, event):
-		'''Called when an event is added to the event list'''
-		if event.show_in_systray:
-			self.set_img()
-
-	def on_event_removed(self, event_list):
-		'''Called when one or more events are removed from the event list'''
-		self.set_img()
-
 	def set_img(self):
 		if not gajim.interface.systray_enabled:
 			return
 		if gajim.events.get_nb_systray_events():
-			state = 'event'
+			state = 'message'
 		else:
 			state = self.status
 		image = gajim.interface.roster.jabber_state_images['16'][state]
@@ -150,7 +125,7 @@ class Systray:
 
 		# We need our own set of status icons, let's make 'em!
 		iconset = gajim.config.get('iconset')
-		path = os.path.join(helpers.get_iconset_path(iconset), '16x16')
+		path = os.path.join(gajim.DATA_DIR, 'iconsets', iconset, '16x16')
 		state_images = gajim.interface.roster.load_iconset(path)
 
 		if state_images.has_key('muc_active'):
@@ -220,13 +195,16 @@ class Systray:
 					account_menu_for_single_message.append(item)
 
 					# join gc 
-					gc_item = gtk.MenuItem(_('using account %s') % account, False)
+					label = gtk.Label()
+					label.set_markup('<u>' + account.upper() +'</u>')
+					label.set_use_underline(False)
+					gc_item = gtk.MenuItem()
+					gc_item.add(label)
+					gc_item.connect('state-changed',
+						gtkgui_helpers.on_bm_header_changed_state)
 					gc_sub_menu.append(gc_item)
-					gc_menuitem_menu = gtk.Menu()
-					gajim.interface.roster.add_bookmarks_list(gc_menuitem_menu,
+					gajim.interface.roster.add_bookmarks_list(gc_sub_menu,
 						account)
-					gc_item.set_submenu(gc_menuitem_menu)
-					gc_sub_menu.show_all()
 
 		elif connected_accounts == 1: # one account
 			# one account connected, no need to show 'as jid'
@@ -247,7 +225,9 @@ class Systray:
 
 		sounds_mute_menuitem.set_active(not gajim.config.get('sounds_on'))
 
-		if os.name == 'nt': 
+		if os.name == 'nt':
+			# see http://bugzilla.gnome.org/show_bug.cgi?id=377349
+			#FIXME: until it is fixed, put under mouse coordinates
 			if gtk.pygtk_version >= (2, 10, 0) and gtk.gtk_version >= (2, 10, 0):
 				if self.added_hide_menuitem is False:
 					self.systray_context_menu.prepend(gtk.SeparatorMenuItem()) 
@@ -289,20 +269,22 @@ class Systray:
 
 	def on_left_click(self):
 		win = gajim.interface.roster.window
-		# toggle visible/hidden for roster window
-		if win.get_property('visible') and win.get_property('has-toplevel-focus'):
-			# visible in ANY virtual desktop?
+		if len(gajim.events.get_systray_events()) == 0:
+			# no pending events, so toggle visible/hidden for roster window
+			if win.get_property('visible'): # visible in ANY virtual desktop?
 
-			# we could be in another VD right now. eg vd2
-			# and we want to show it in vd2
-			if not gtkgui_helpers.possibly_move_window_in_current_desktop(win):
-				win.hide() # else we hide it from VD that was visible in
+				# we could be in another VD right now. eg vd2
+				# and we want to show it in vd2
+				if not gtkgui_helpers.possibly_move_window_in_current_desktop(win):
+					win.hide() # else we hide it from VD that was visible in
+			else:
+				# in Windows (perhaps other Window Managers too) minimize state
+				# is remembered, so make sure it's not minimized (iconified)
+				# because user wants to see roster
+				win.deiconify()
+				win.present()
 		else:
-			# in Windows (perhaps other Window Managers too) minimize state
-			# is remembered, so make sure it's not minimized (iconified)
-			# because user wants to see roster
-			win.deiconify()
-			win.present()
+			self.handle_first_event()
 
 	def handle_first_event(self):
 		account, jid, event = gajim.events.get_first_systray_event()
@@ -311,9 +293,11 @@ class Systray:
 	def on_middle_click(self):
 		'''middle click raises window to have complete focus (fe. get kbd events)
 		but if already raised, it hides it'''
-		if len(gajim.events.get_systray_events()) == 0:
-			return
-		self.handle_first_event()
+		win = gajim.interface.roster.window
+		if win.is_active(): # is it fully raised? (eg does it receive kbd events?)
+			win.hide()
+		else:
+			win.present()
 
 	def on_clicked(self, widget, event):
 		self.on_tray_leave_notify_event(widget, None)
@@ -332,12 +316,24 @@ class Systray:
 		l = ['online', 'chat', 'away', 'xa', 'dnd', 'invisible', 'SEPARATOR',
 			'CHANGE_STATUS_MSG_MENUITEM', 'SEPARATOR', 'offline']
 		index = l.index(show)
-		if not helpers.statuses_unified():
-			gajim.interface.roster.status_combobox.set_active(index + 2)
-			return
 		current = gajim.interface.roster.status_combobox.get_active()
 		if index != current:
 			gajim.interface.roster.status_combobox.set_active(index)
+		else:
+			# We maybe need to emit the changed signal if all globaly sync'ed
+			# account don't have the global status
+			need_to_change = False
+			accounts = gajim.connections.keys()
+			for acct in accounts:
+				if not gajim.config.get_per('accounts', acct,
+				'sync_with_global_status'):
+					continue
+				acct_show = gajim.SHOW_LIST[gajim.connections[acct].connected]
+				if acct_show != show:
+					need_to_change = True
+					break
+			if need_to_change:
+				gajim.interface.roster.status_combobox.emit('changed')
 
 	def on_change_status_message_activate(self, widget):
 		model = gajim.interface.roster.status_combobox.get_model()
@@ -401,11 +397,9 @@ class Systray:
 			eb.add(self.img_tray)
 			self.t.add(eb)
 			self.set_img()
-			self.subscribe_events()
 		self.t.show_all()
 
 	def hide_icon(self):
 		if self.t:
 			self.t.destroy()
 			self.t = None
-			self.unsubscribe_events()

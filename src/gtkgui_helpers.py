@@ -1,26 +1,20 @@
 ##	gtkgui_helpers.py
 ##
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2004-2005 Vincent Hanquez <tab@snarc.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005 Dimitur Kirov <dkirov@gmail.com>
-##                    Travis Shirk <travis@pobox.com>
-##                    Norman Rasmussen <norman@rasmussen.co.za>
-## Copyright (C) 2007 Stephan Erb <steve-e@h3c.de>
+## Copyright (C) 2005 Travis Shirk <travis@pobox.com>
+## Copyright (C) 2005 Norman Rasmussen <norman@rasmussen.co.za>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import xml.sax.saxutils
@@ -33,9 +27,6 @@ import sys
 
 import vcard
 import dialogs
-
-import logging
-log = logging.getLogger('gajim.gtkgui_helpers')
 
 
 HAS_PYWIN32 = True
@@ -127,7 +118,7 @@ def get_theme_font_for_option(theme, option):
 	
 def get_default_font():
 	'''Get the desktop setting for application font
-	first check for GNOME, then Xfce and last KDE
+	first check for GNOME, then XFCE and last KDE
 	it returns None on failure or else a string 'Font Size' '''
 	
 	try:
@@ -178,6 +169,19 @@ def get_default_font():
 	
 	return None
 	
+def escape_for_pango_markup(string):
+	# escapes < > & ' "
+	# for pango markup not to break
+	if string is None:
+		return
+	if gtk.pygtk_version >= (2, 8, 0) and gtk.gtk_version >= (2, 8, 0):
+		escaped_str = gobject.markup_escape_text(string)
+	else:
+		escaped_str = xml.sax.saxutils.escape(string, {"'": '&apos;',
+			'"': '&quot;'})
+	
+	return escaped_str
+
 def autodetect_browser_mailer():
 	# recognize the environment and set appropriate browser/mailer
 	if user_runs_gnome():
@@ -186,8 +190,6 @@ def autodetect_browser_mailer():
 		gajim.config.set('openwith', 'kfmclient exec')
 	elif user_runs_xfce():
 		gajim.config.set('openwith', 'exo-open')
-	elif user_runs_osx():
-		gajim.config.set('openwith', 'open')
 	else:
 		gajim.config.set('openwith', 'custom')
 
@@ -202,9 +204,6 @@ def user_runs_xfce():
 	if 'startxfce4' in procs or 'xfce4-session' in procs:
 		return True
 	return False
-
-def user_runs_osx():
-	return sys.platform == 'darwin'
 
 def get_running_processes():
 	'''returns running processes or None (if not /proc exists)'''
@@ -259,87 +258,34 @@ def resize_window(window, w, h):
 		h = screen_h
 	window.resize(abs(w), abs(h))
 
-class HashDigest:
-	def __init__(self, algo, digest):
-		self.algo = self.cleanID(algo)
-		self.digest = self.cleanID(digest)
-
-	def cleanID(self, id):
-		id = id.strip().lower()
-		for strip in (' :.-_'): id = id.replace(strip, '')
-		return id
-
-	def __eq__(self, other):
-		sa, sd = self.algo, self.digest
-		if isinstance(other, self.__class__):
-			oa, od = other.algo, other.digest
-		elif isinstance(other, basestring):
-			sa, oa, od = None, None, self.cleanID(other)
-		elif isinstance(other, tuple) and len(other) == 2:
-			oa, od = self.cleanID(other[0]), self.cleanID(other[1])
-		else:
-			return False
-
-		return sa == oa and sd == od
-
-	def __ne__(self, other):
-		return not self == other
-
-	def __hash__(self):
-		return self.algo ^ self.digest
-
-	def __str__(self):
-		prettydigest = ''
-		for i in xrange(0, len(self.digest), 2):
-			prettydigest += self.digest[i:i + 2] + ':'
-		return prettydigest[:-1]
-
-	def __repr__(self):
-		return "%s(%s, %s)" % (self.__class__, repr(self.algo), repr(str(self)))
-
-class ServersXMLHandler(xml.sax.ContentHandler):
-	def __init__(self):
+class TagInfoHandler(xml.sax.ContentHandler):
+	def __init__(self, tagname1, tagname2):
 		xml.sax.ContentHandler.__init__(self)
+		self.tagname1 = tagname1
+		self.tagname2 = tagname2
 		self.servers = []
 
 	def startElement(self, name, attributes):
-		if name == 'item':
-			# we will get the port next time so we just set it 0 here
-			sitem = [None, 0, {}]
-			sitem[2]['digest'] = {}
-			sitem[2]['hidden'] = False
+		if name == self.tagname1:
 			for attribute in attributes.getNames():
 				if attribute == 'jid':
 					jid = attributes.getValue(attribute)
-					sitem[0] = jid
-				elif attribute == 'hidden':
-					hidden = attributes.getValue(attribute)
-					if hidden.lower() in ('1', 'y', 'yes', 't', 'true', 'on'):
-						sitem[2]['hidden'] = True
-			self.servers.append(sitem)
-		elif name == 'active':
+					# we will get the port next time so we just set it 0 here
+					self.servers.append([jid, 0])
+		elif name == self.tagname2:
 			for attribute in attributes.getNames():
 				if attribute == 'port':
 					port = attributes.getValue(attribute)
 					# we received the jid last time, so we now assign the port
 					# number to the last jid in the list
 					self.servers[-1][1] = port
-		elif name == 'digest':
-			algo, digest = None, None
-			for attribute in attributes.getNames():
-				if attribute == 'algo':
-					algo = attributes.getValue(attribute)
-				elif attribute == 'value':
-					digest = attributes.getValue(attribute)
-			hd = HashDigest(algo, digest)
-			self.servers[-1][2]['digest'][hd.algo] = hd
 
 	def endElement(self, name):
 		pass
 
 def parse_server_xml(path_to_file):
 	try:
-		handler = ServersXMLHandler()
+		handler = TagInfoHandler('item', 'active')
 		xml.sax.parse(path_to_file, handler)
 		return handler.servers
 	# handle exception if unable to open file
@@ -352,7 +298,8 @@ def parse_server_xml(path_to_file):
 def set_unset_urgency_hint(window, unread_messages_no):
 	'''sets/unsets urgency hint in window argument
 	depending if we have unread messages or not'''
-	if gajim.config.get('use_urgency_hint'):
+	if gtk.gtk_version >= (2, 8, 0) and gtk.pygtk_version >= (2, 8, 0) and \
+		gajim.config.get('use_urgency_hint'):
 		if unread_messages_no > 0:
 			window.props.urgency_hint = True
 		else:
@@ -539,7 +486,7 @@ def get_scaled_pixbuf(pixbuf, kind):
 	scaled_buf = pixbuf.scale_simple(w, h, gtk.gdk.INTERP_HYPER)
 	return scaled_buf
 
-def get_avatar_pixbuf_from_cache(fjid, is_fake_jid = False, use_local = True):
+def get_avatar_pixbuf_from_cache(fjid, is_fake_jid = False):
 	'''checks if jid has cached avatar and if that avatar is valid image
 	(can be shown)
 	returns None if there is no image in vcard
@@ -556,21 +503,8 @@ def get_avatar_pixbuf_from_cache(fjid, is_fake_jid = False, use_local = True):
 	if is_fake_jid:
 		puny_nick = helpers.sanitize_filename(nick)
 		path = os.path.join(gajim.VCARD_PATH, puny_jid, puny_nick)
-		local_avatar_basepath = os.path.join(gajim.AVATAR_PATH, puny_jid,
-			puny_nick) + '_local'
 	else:
 		path = os.path.join(gajim.VCARD_PATH, puny_jid)
-		local_avatar_basepath = os.path.join(gajim.AVATAR_PATH, puny_jid) + \
-			'_local'
-	if use_local:
-		for extension in ('.png', '.jpeg'):
-			local_avatar_path = local_avatar_basepath + extension
-			if os.path.isfile(local_avatar_path):
-				avatar_file = open(local_avatar_path, 'rb')
-				avatar_data = avatar_file.read()
-				avatar_file.close()
-				return get_pixbuf_from_data(avatar_data)
-
 	if not os.path.isfile(path):
 		return 'ask'
 
@@ -614,10 +548,6 @@ def get_path_to_generic_or_avatar(generic, jid = None, suffix = None):
 	if jid:
 		puny_jid = helpers.sanitize_filename(jid)
 		path_to_file = os.path.join(gajim.AVATAR_PATH, puny_jid) + suffix
-		filepath, extension = os.path.splitext(path_to_file) 
-		path_to_local_file = filepath + '_local' + extension 
-		if os.path.exists(path_to_local_file):
-			return path_to_local_file
 		if os.path.exists(path_to_file):
 			return path_to_file
 	return os.path.abspath(generic)
@@ -654,10 +584,12 @@ def possibly_set_gajim_as_xmpp_handler():
 	else:
 		path_to_kde_file = None
 
-	def set_gajim_as_xmpp_handler(is_checked=None):
-		if is_checked != None:
+	def set_gajim_as_xmpp_handler(widget = None):
+		if widget:
 			# come from confirmation dialog
-			gajim.config.set('check_if_gajim_is_default', is_checked)
+			gajim.config.set('check_if_gajim_is_default',
+				dlg.checkbutton.get_active())
+			dlg.destroy()
 		path_to_gajim_script, typ = get_abspath_for_script('gajim-remote', True)
 		if path_to_gajim_script:
 			if typ == 'svn':
@@ -691,9 +623,7 @@ Description=xmpp
 ''' % command)
 					f.close()
 				except IOError:
-					log.debug("I/O Error writing settings to %s", repr(path_to_kde_file), exc_info=True)
-		else: # no gajim remote, stop ask user everytime
-			gajim.config.set('check_if_gajim_is_default', False)
+					pass
 
 	try:
 		import gconf
@@ -720,9 +650,10 @@ Description=xmpp
 		sectext = _('Would you like to make Gajim the default Jabber client?')
 		checktext = _('Always check to see if Gajim is the default Jabber client '
 			'on startup')
-		def on_cancel():
+		def on_cancel(widget):
 			gajim.config.set('check_if_gajim_is_default',
-				dlg.is_checked())
+				dlg.checkbutton.get_active())
+			dlg.destroy()
 		dlg = dialogs.ConfirmationDialogCheck(pritext, sectext, checktext,
 			set_gajim_as_xmpp_handler, on_cancel)
 		if gajim.config.get('check_if_gajim_is_default'):
@@ -760,8 +691,9 @@ def destroy_widget(widget):
 def on_avatar_save_as_menuitem_activate(widget, jid, account,
 default_name = ''):
 	def on_ok(widget):
-		def on_ok2(file_path, pixbuf):
+		def on_ok2(widget, file_path, pixbuf):
 			pixbuf.save(file_path, 'jpeg')
+			dialog2.destroy()
 			dialog.destroy()
 
 		file_path = dialog.get_filename()
@@ -796,7 +728,7 @@ default_name = ''):
 		is_fake = False
 		if account and gajim.contacts.is_pm_from_jid(account, jid):
 			is_fake = True
-		pixbuf = get_avatar_pixbuf_from_cache(jid, is_fake, False)
+		pixbuf = get_avatar_pixbuf_from_cache(jid, is_fake)
 		ext = file_path.split('.')[-1]
 		type_ = ''
 		if not ext:
@@ -815,7 +747,7 @@ default_name = ''):
 			if os.path.exists(file_path):
 				os.remove(file_path)
 			new_file_path = '.'.join(file_path.split('.')[:-1]) + '.jpeg'
-			dialogs.ConfirmationDialog(_('Extension not supported'),
+			dialog2 = dialogs.ConfirmationDialog(_('Extension not supported'),
 				_('Image cannot be saved in %(type)s format. Save as %(new_filename)s?') % {'type': type_, 'new_filename': new_file_path},
 				on_response_ok = (on_ok2, new_file_path, pixbuf))
 		else:
@@ -840,20 +772,3 @@ default_name = ''):
 
 def on_bm_header_changed_state(widget, event):
 	widget.set_state(gtk.STATE_NORMAL) #do not allow selected_state
-
-def create_combobox(value_list, selected_value = None):
-	'''Value_list is [(label1, value1), ]'''
-	liststore = gtk.ListStore(str, str)
-	combobox = gtk.ComboBox(liststore)
-	cell = gtk.CellRendererText()
-	combobox.pack_start(cell, True)
-	combobox.add_attribute(cell, 'text', 0)
-	i = -1
-	for value in value_list:
-		liststore.append(value)
-		if selected_value == value[1]:
-			i = value_list.index(value)
-	if i > -1:
-		combobox.set_active(i)
-	combobox.show_all()
-	return combobox

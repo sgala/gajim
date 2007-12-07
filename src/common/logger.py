@@ -1,31 +1,22 @@
 ## logger.py
 ##
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
-## Copyright (C) 2005-2006 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2005-2006 Yann Le Boulanger <asterix@lagaule.org>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
 ##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
-##
-
-''' This module allows to access the on-disk database of logs. '''
 
 import os
 import sys
 import time
 import datetime
-from gzip import GzipFile
-from cStringIO import StringIO
 
 import exceptions
 import gajim
@@ -142,9 +133,6 @@ class Logger:
 		for row in rows:
 			# row[0] is first item of row (the only result here, the jid)
 			self.jids_already_in.append(row[0])
-	
-	def get_jids_in_db(self):
-		return self.jids_already_in
 
 	def jid_is_from_pm(self, jid):
 		'''if jid is gajim@conf/nkour it's likely a pm one, how we know
@@ -648,77 +636,3 @@ class Logger:
 		for result in results:
 			answer[result[0]] = self.convert_api_values_to_human_transport_type(result[1])
 		return answer
-
-	# A longer note here:
-	# The database contains a blob field. Pysqlite seems to need special care for such fields.
-	# When storing, we need to convert string into buffer object (1).
-	# When retrieving, we need to convert it back to a string to decompress it. (2)
-	# GzipFile needs a file-like object, StringIO emulates file for plain strings.
-	def iter_caps_data(self):
-		''' Iterate over caps cache data stored in the database.
-		The iterator values are pairs of (node, ver, ext, identities, features):
-		identities == {'category':'foo', 'type':'bar', 'name':'boo'},
-		features being a list of feature namespaces. '''
-
-		# get data from table
-		# the data field contains binary object (gzipped data), this is a hack
-		# to get that data without trying to convert it to unicode
-		#tmp, self.con.text_factory = self.con.text_factory, str
-		try:
-			self.cur.execute('''SELECT node, ver, ext, data FROM caps_cache;''');
-		except sqlite.OperationalError:
-			# might happen when there's no caps_cache table yet
-			# -- there's no data to read anyway then
-			#self.con.text_factory = tmp
-			return
-		#self.con.text_factory = tmp
-			
-		for node, ver, ext, data in self.cur:
-			# for each row: unpack the data field
-			# (format: (category, type, name, category, type, name, ...
-			#   ..., 'FEAT', feature1, feature2, ...).join(' '))
-			# NOTE: if there's a need to do more gzip, put that to a function
-			data=GzipFile(fileobj=StringIO(str(data))).read().split('\0') # (2) -- note above
-			i=0
-			identities=set()
-			features=set()
-			while i<(len(data)-2) and data[i]!='FEAT':
-				category=data[i]
-				type=data[i+1]
-				name=data[i+2]
-				identities.add((category,type,name))
-				i+=3
-			i+=1
-			while i<len(data):
-				features.add(data[i])
-				i+=1
-			if not ext: ext=None	# to make '' a None
-
-			# yield the row
-			yield node, ver, ext, identities, features
-
-	def add_caps_entry(self, node, ver, ext, identities, features):
-		data=[]
-		for identity in identities:
-			# there is no FEAT category
-			if identity[0]=='FEAT': return
-			if len(identity)<2 or not identity[2]:
-				data.extend((identity[0], identity[1], ''))
-			else:
-				data.extend(identity)
-		data.append('FEAT')
-		data.extend(features)
-		data = '\0'.join(data)
-		string = StringIO()	# if there's a need to do more gzip, put that to a function
-		gzip=GzipFile(fileobj=string, mode='w')
-		gzip.write(data)
-		gzip.close()
-		data = string.getvalue()
-		self.cur.execute('''
-			INSERT INTO caps_cache ( node, ver, ext, data )
-			VALUES (?, ?, ?, ?);
-			''', (node, ver, ext, buffer(data))) # (1) -- note above
-		try:
-			self.con.commit()
-		except sqlite.OperationalError, e:
-			print >> sys.stderr, str(e)

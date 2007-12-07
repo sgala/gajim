@@ -32,7 +32,6 @@
   </item>
   <item jid="amessage.info" name="Jabber server from amessage">
     <active port="5222"/>
-    <digest algo="sha1" value="69:FA:D6:32:BF:84:CE:01:D9:FC:C5:1A:E3:04:12:FB:A5:28:03:1A"/>
   </item>
   <item jid="amessage.li" name="Jabber server in Liechtenstein">
     <active port="5222"/>
@@ -68,9 +67,6 @@
     <active port="5222"/>
   </item>
   <item jid="foxalpha.de" name="">
-    <active port="5222"/>
-  </item>
-  <item jid="fritalk.com" name="French Jabber Server">
     <active port="5222"/>
   </item>
   <item jid="here.dk" name="Jabber server in Denmark">
@@ -184,9 +180,6 @@
   <item jid="jabber.noxa.de" name="Server in Germany">
     <active port="5222"/>
   </item>
-  <item jid="jabber.nuxo.net" name="Server in France">
-    <active port="5222"/>
-  </item>
   <item jid="jabber.obsidian.co.za" name="Server in South Africa">
     <active port="5222"/>
   </item>
@@ -198,7 +191,6 @@
   </item>
   <item jid="jabber.org" name="Server hosted by the Jabber Software Foundation">
     <active port="5222"/>
-    <digest algo="sha1" value="66:9B:DB:4F:85:B7:A2:26:4D:76:01:C1:14:ED:0A:A9:24:15:8C:85"/>
   </item>
   <item jid="jabber.org.au" name="Server in Australia">
     <active port="5222"/>
@@ -223,7 +215,6 @@
   </item>
   <item jid="jabber.sk" name="Slovak Jabber server">
     <active port="5222"/>
-    <digest algo="sha1" value="EB:2C:ED:CC:FD:C1:F8:8F:58:07:CE:EF:09:0F:72:45:5E:1E:7A:96"/>
   </item>
   <item jid="jabber.snc.ru" name="Jabber server in Russia">
     <active port="5222"/>
@@ -377,9 +368,5 @@
   </item>
   <item jid="xmpp.us" name="">
     <active port="5222"/>
-  </item>
-  <item jid="gajim.org" name="Official server of Gajim" hidden="True">
-    <active port="5222"/>
-    <digest algo="sha1" value="25:79:5D:AC:3A:62:C0:96:5A:C9:36:76:D8:B0:78:1F:AA:DA:79:18"/>
   </item>
 </query>

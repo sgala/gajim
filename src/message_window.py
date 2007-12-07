@@ -1,30 +1,24 @@
 ##	message_window.py
 ##
-## Copyright (C) 2003-2004 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2004 Yann Le Boulanger <asterix@lagaule.org>
 ##                         Vincent Hanquez <tab@snarc.org>
-## Copyright (C) 2005 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2005 Yann Le Boulanger <asterix@lagaule.org>
 ##                    Vincent Hanquez <tab@snarc.org>
 ##                    Nikos Kouremenos <kourem@gmail.com>
 ##                    Dimitur Kirov <dkirov@gmail.com>
 ##                    Travis Shirk <travis@pobox.com>
 ##                    Norman Rasmussen <norman@rasmussen.co.za>
 ## Copyright (C) 2006 Travis Shirk <travis@pobox.com>
-##                    Geobert Quach <geobert@gmail.com>
-## Copyright (C) 2007 Stephan Erb <steve-e@h3c.de> 
+## Copyright (C) 2006 Geobert Quach <geobert@gmail.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import gtk
@@ -120,7 +114,7 @@ class MessageWindow:
 			self.notebook.set_show_tabs(False)
 		self.notebook.set_show_border(gajim.config.get('tabs_border'))
 
-		# if GTK+ version < 2.10, use OUR way to reorder tabs (set up DnD)
+		# set up DnD if GTK+ version < 2.10, use OUR way to reorder tabs
 		if gtk.pygtk_version < (2, 10, 0) or gtk.gtk_version < (2, 10, 0):
 			self.hid = self.notebook.connect('drag_data_received',
 				self.on_tab_label_drag_data_received_cb)
@@ -163,16 +157,9 @@ class MessageWindow:
 
 	def _on_window_delete(self, win, event):
 		# Make sure all controls are okay with being deleted
-		ctrl_to_minimize = []
 		for ctrl in self.controls():
-			allow_shutdown = ctrl.allow_shutdown(self.CLOSE_CLOSE_BUTTON)
-			if allow_shutdown == 'no':
+			if not ctrl.allow_shutdown(self.CLOSE_CLOSE_BUTTON):
 				return True # halt the delete
-			elif allow_shutdown == 'minimize':
-				ctrl_to_minimize.append(ctrl)
-		# If all are ok, minimize the one that need to be minimized
-		for ctrl in ctrl_to_minimize:
-			ctrl.minimize()
 		return False
 
 	def _on_window_destroy(self, win):
@@ -297,7 +284,8 @@ class MessageWindow:
 			elif chr(keyval) in st: # ALT + 1,2,3..
 				self.notebook.set_current_page(st.index(chr(keyval)))
 			elif keyval == gtk.keysyms.c: # ALT + C toggles chat buttons
-				control.chat_buttons_set_visible(not control.hide_chat_buttons)
+				control.chat_buttons_set_visible(not \
+					control.hide_chat_buttons_current)
 		# Close tab bindings
 		elif keyval == gtk.keysyms.Escape and \
 				gajim.config.get('escape_key_closes'): # Escape
@@ -375,12 +363,7 @@ class MessageWindow:
 		'''reason is only for gc (offline status message)
 		if force is True, do not ask any confirmation'''
 		# Shutdown the MessageControl
-		allow_shutdown = ctrl.allow_shutdown(method)
-		if not force and allow_shutdown == 'no':
-			return
-		if allow_shutdown == 'minimize' and method != self.CLOSE_COMMAND:
-			ctrl.minimize()
-			self.check_tabs()
+		if not force and not ctrl.allow_shutdown(method):
 			return
 		if reason is not None: # We are leaving gc with a status message
 			ctrl.shutdown(reason)
@@ -403,10 +386,6 @@ class MessageWindow:
 		if len(self._controls[ctrl.account]) == 0:
 			del self._controls[ctrl.account]
 
-		self.check_tabs()
-		self.show_title()
-
-	def check_tabs(self):
 		if self.get_num_controls() == 0:
 			# These are not called when the window is destroyed like this, fake it
 			gajim.interface.msg_win_mgr._on_window_delete(self.window, None)
@@ -420,8 +399,9 @@ class MessageWindow:
 			self.notebook.set_show_tabs(show_tabs_if_one_tab)
 			if not show_tabs_if_one_tab:
 				self.alignment.set_property('top-padding', 0)
+		self.show_title()
 
-
+			
 	def redraw_tab(self, ctrl, chatstate = None):
 		hbox = self.notebook.get_tab_label(ctrl.widget).get_children()[0]
 		status_img = hbox.get_children()[0]

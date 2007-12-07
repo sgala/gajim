@@ -1,40 +1,48 @@
 #!/usr/bin/env python
 ## history_manager.py
 ##
-## Copyright (C) 2006-2007 Nikos Kouremenos <kourem@gmail.com>
+## Copyright (C) 2006 Nikos Kouremenos <kourem@gmail.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 ## NOTE: some method names may match those of logger.py but that's it
 ## someday (TM) should have common class that abstracts db connections and helpers on it
 ## the same can be said for history_window.py
 
-import sys
 import os
+
+if os.name == 'nt':
+	import warnings
+	warnings.filterwarnings(action='ignore')
+
+# Used to create windows installer with GTK included
+#	paths = os.environ['PATH']
+#	list_ = paths.split(';')
+#	new_list = []
+#	for p in list_:
+#		if p.find('gtk') < 0 and p.find('GTK') < 0:
+#			new_list.append(p)
+#	new_list.insert(0, 'gtk/lib')
+#	new_list.insert(0, 'gtk/bin')
+#	os.environ['PATH'] = ';'.join(new_list)
+#	os.environ['GTK_BASEPATH'] = 'gtk'
+
+import sys
 import signal
 import gtk
-import gobject
 import time
 import locale
 
 from common import i18n
-import common.configpaths 
-common.configpaths.gajimpaths.init()
-common.configpaths.gajimpaths.init_profile()
-from common import exceptions
+import exceptions
 import dialogs
 import gtkgui_helpers
 from common.logger import LOG_DB_PATH, constants
@@ -84,7 +92,10 @@ class HistoryManager:
 		self.search_results_scrolledwindow = xml.get_widget(
 			'search_results_scrolledwindow')
 		self.welcome_label = xml.get_widget('welcome_label')
-
+			
+		self.logs_scrolledwindow.set_no_show_all(True)
+		self.search_results_scrolledwindow.set_no_show_all(True)
+		
 		self.jids_already_in = [] # holds jids that we already have in DB
 		self.AT_LEAST_ONE_DELETION_DONE = False
 		
@@ -343,7 +354,7 @@ class HistoryManager:
 				if color:
 					message_ += ' foreground="%s"' % color
 				message_ += '>%s</span>' % \
-					gobject.markup_escape_text(message)
+					gtkgui_helpers.escape_for_pango_markup(message)
 				self.logs_liststore.append((log_line_id, jid_id, time_, message_,
 					subject, nickname))
 
@@ -405,7 +416,8 @@ class HistoryManager:
 		dlg = xml.get_widget('filechooserdialog')
 		dlg.set_title(_('Exporting History Logs...'))
 		dlg.set_current_folder(gajim.HOME_DIR)
-		dlg.props.do_overwrite_confirmation = True
+		if gtk.pygtk_version > (2, 8, 0):
+			dlg.props.do_overwrite_confirmation = True
 		response = dlg.run()
 		
 		if response == gtk.RESPONSE_OK: # user want us to export ;)
@@ -486,8 +498,9 @@ class HistoryManager:
 		if paths_len == 0: # nothing is selected
 			return
 
-		def on_ok(liststore, list_of_paths):
+		def on_ok(widget, liststore, list_of_paths):
 			# delete all rows from db that match jid_id
+			self.dialog.destroy()
 			list_of_rowrefs = []
 			for path in list_of_paths: # make them treerowrefs (it's needed)
 				list_of_rowrefs.append(gtk.TreeRowReference(liststore, path))
@@ -518,7 +531,7 @@ class HistoryManager:
 			'Do you really want to delete logs of the selected contact?',
 			'Do you really want to delete logs of the selected contacts?',
 			paths_len)
-		dialogs.ConfirmationDialog(pri_text,
+		self.dialog = dialogs.ConfirmationDialog(pri_text,
 			_('This is an irreversible operation.'), on_response_ok = (on_ok,
 			liststore, list_of_paths))
 
@@ -527,7 +540,8 @@ class HistoryManager:
 		if paths_len == 0: # nothing is selected
 			return
 
-		def on_ok(liststore, list_of_paths):
+		def on_ok(widget, liststore, list_of_paths):
+			self.dialog.destroy()
 			# delete rows from db that match log_line_id
 			list_of_rowrefs = []
 			for path in list_of_paths: # make them treerowrefs (it's needed)
@@ -553,7 +567,7 @@ class HistoryManager:
 		pri_text = i18n.ngettext(
 			'Do you really want to delete the selected message?',
 			'Do you really want to delete the selected messages?', paths_len)
-		dialogs.ConfirmationDialog(pri_text,
+		self.dialog = dialogs.ConfirmationDialog(pri_text,
 			_('This is an irreversible operation.'), on_response_ok = (on_ok,
 			liststore, list_of_paths))
 

@@ -1,10 +1,9 @@
-SUBDIRS = common osx
+SUBDIRS = common
 
 CLEANFILES = \
 	trayicon.c
 INCLUDES = \
 	$(PYTHON_INCLUDES) 
-export MACOSX_DEPLOYMENT_TARGET=10.4
 
 if BUILD_GTKSPELL
 gtkspelllib_LTLIBRARIES = gtkspell.la

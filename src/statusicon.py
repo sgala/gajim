@@ -1,34 +1,24 @@
 ## statusicon.py
 ##
 ## Copyright (C) 2006 Nikos Kouremenos <kourem@gmail.com>
-## Copyright (C) 2007 Lukas Petrovicky <lukas@petrovicky.net>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or
+## This program is free software; you can redistribute it and/or
 ## modify it under the terms of the GNU General Public License
 ## as published by the Free Software Foundation; either version 2
 ## of the License, or (at your option) any later version.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
 ##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
-##
 
-import sys
 import gtk
 import systray
 import gobject
 
 from common import gajim
 from common import helpers
-
-if sys.platform == 'darwin':
-	import osx
 
 class StatusIcon(systray.Systray):
 	'''Class for the notification area icon'''
@@ -49,15 +39,13 @@ class StatusIcon(systray.Systray):
 				self.on_status_icon_right_clicked)
 
 		self.set_img()
-		self.status_icon.set_visible(True)
-		self.subscribe_events()
+		self.status_icon.props.visible = True	
 
 	def on_status_icon_right_clicked(self, widget, event_button, event_time):
 		self.make_menu(event_button, event_time)
 
 	def hide_icon(self):
-		self.status_icon.set_visible(False)
-		self.unsubscribe_events()
+		self.status_icon.props.visible = False
 
 	def on_status_icon_left_clicked(self, widget):
 		gobject.idle_add(self.on_left_click)
@@ -69,18 +57,16 @@ class StatusIcon(systray.Systray):
 		text = helpers.get_notification_icon_tooltip_text()
 		self.status_icon.set_tooltip(text)
 		if gajim.events.get_nb_systray_events():
-			if sys.platform == 'darwin':
-				osx.nsapp.requestUserAttention()
-			state = 'event'
-			self.status_icon.set_blinking(True)
+			state = 'message' # FIXME: this state should be called event, not message
+			self.status_icon.props.blinking = True
 		else:
 			state = self.status
-			self.status_icon.set_blinking(False)
+			self.status_icon.props.blinking = False
 		
 		#FIXME: do not always use 16x16 (ask actually used size and use that)
 		image = gajim.interface.roster.jabber_state_images['16'][state]
 		if image.get_storage_type() == gtk.IMAGE_PIXBUF:
-			self.status_icon.set_from_pixbuf(image.get_pixbuf())
+			self.status_icon.props.pixbuf = image.get_pixbuf()
 		#FIXME: oops they forgot to support GIF animation?
 		#or they were lazy to get it to work under Windows! WTF!
 		#elif image.get_storage_type() == gtk.IMAGE_ANIMATION:

@@ -2,7 +2,7 @@ docdir = '../'
 
 datadir = '../'
 
-version = '0.11.2.2-svn'
+version = '0.11.4'
 
 import sys, os.path
 for base in ('.', 'common'):

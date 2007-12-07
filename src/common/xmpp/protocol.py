@@ -45,7 +45,6 @@ NS_DISCO        ='http://jabber.org/protocol/disco'
 NS_DISCO_INFO   =NS_DISCO+'#info'
 NS_DISCO_ITEMS  =NS_DISCO+'#items'
 NS_ENCRYPTED    ='jabber:x:encrypted'                                   # XEP-0027
-NS_ESESSION_INIT='http://www.xmpp.org/extensions/xep-0116.html#ns-init' # XEP-0116
 NS_EVENT        ='jabber:x:event'                                       # XEP-0022
 NS_FEATURE      ='http://jabber.org/protocol/feature-neg'  
 NS_FILE         ='http://jabber.org/protocol/si/profile/file-transfer'  # XEP-0096
@@ -63,7 +62,6 @@ NS_MUC          ='http://jabber.org/protocol/muc'
 NS_MUC_USER     =NS_MUC+'#user'
 NS_MUC_ADMIN    =NS_MUC+'#admin'
 NS_MUC_OWNER    =NS_MUC+'#owner'
-NS_MUC_UNIQUE   =NS_MUC+'#unique'
 NS_NICK         ='http://jabber.org/protocol/nick'                      # XEP-0172
 NS_OFFLINE      ='http://www.jabber.org/jeps/jep-0030.html'             # XEP-0013
 NS_PHYSLOC      ='http://jabber.org/protocol/physloc'                   # XEP-0112
@@ -83,7 +81,6 @@ NS_SESSION      ='urn:ietf:params:xml:ns:xmpp-session'
 NS_SI           ='http://jabber.org/protocol/si'                        # XEP-0096
 NS_SI_PUB       ='http://jabber.org/protocol/sipub'                     # XEP-0137
 NS_SIGNED       ='jabber:x:signed'                                      # XEP-0027
-NS_STANZA_CRYPTO='http://www.xmpp.org/extensions/xep-0200.html#ns'			# JEP-0200
 NS_STANZAS      ='urn:ietf:params:xml:ns:xmpp-stanzas'
 NS_STREAM       ='http://affinix.com/jabber/stream'
 NS_STREAMS      ='http://etherx.jabber.org/streams'
@@ -452,14 +449,6 @@ class Message(Protocol):
         th=self.getThread()
         if th: m.setThread(th)
         return m
-    def getStatusCode(self):
-        """Returns the status code of the message (for groupchat config
-        change)"""
-        attrs = []
-        for xtag in self.getTags('x'):
-            for child in xtag.getTags('status'):
-                attrs.append(child.getAttr('code'))
-        return attrs
 
 class Presence(Protocol):
     """ XMPP Presence object."""

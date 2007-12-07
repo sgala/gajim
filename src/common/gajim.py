@@ -1,23 +1,18 @@
 ##	common/gajim.py
 ##
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2005-2006 Dimitur Kirov <dkirov@gmail.com>
 ## Copyright (C) 2005-2006 Travis Shirk <travis@pobox.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import sys
@@ -76,8 +71,6 @@ LOGPATH = gajimpaths['LOG'] # deprecated
 VCARD_PATH = gajimpaths['VCARD']
 AVATAR_PATH = gajimpaths['AVATAR']
 MY_EMOTS_PATH = gajimpaths['MY_EMOTS']
-MY_ICONSETS_PATH = gajimpaths['MY_ICONSETS']
-MY_CACERTS =  gajimpaths['MY_CACERTS']
 TMP = gajimpaths['TMP']
 DATA_DIR = gajimpaths['DATA']
 HOME_DIR = gajimpaths['HOME']
@@ -131,28 +124,14 @@ status_before_autoaway = {}
 # be online
 transport_avatar = {} # {transport_jid: [jid_list]}
 
-# Is Gnome configured to activate on single click ?
-single_click = False
 SHOW_LIST = ['offline', 'connecting', 'online', 'chat', 'away', 'xa', 'dnd',
-	'invisible', 'error']
+	'invisible']
 
 # zeroconf account name
 ZEROCONF_ACC_NAME = 'Local'
 priority_dict = {}
 for status in ('online', 'chat', 'away', 'xa', 'dnd', 'invisible'):
 	priority_dict[status] = config.get('autopriority' + status)
-
-HAVE_PYCRYPTO = True
-try:
-	import Crypto
-except ImportError:
-	HAVE_PYCRYPTO = False
-
-HAVE_PYSEXY = True
-try:
-	import sexy
-except ImportError:
-	HAVE_PYSEXY = False
 
 def get_nick_from_jid(jid):
 	pos = jid.find('@')

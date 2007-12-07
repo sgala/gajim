@@ -1,21 +1,16 @@
 ##	profile_window.py
 ##
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 # THIS FILE IS FOR **OUR** PROFILE (when we edit our INFO)
@@ -28,11 +23,35 @@ import os
 
 import gtkgui_helpers
 import dialogs
-import vcard
 
 from common import gajim
 from common.i18n import Q_
 
+def get_avatar_pixbuf_encoded_mime(photo):
+	'''return the pixbuf of the image
+	photo is a dictionary containing PHOTO information'''
+	if not isinstance(photo, dict):
+		return None, None, None
+	img_decoded = None
+	avatar_encoded = None
+	avatar_mime_type = None
+	if photo.has_key('BINVAL'):
+		img_encoded = photo['BINVAL']
+		avatar_encoded = img_encoded
+		try:
+			img_decoded = base64.decodestring(img_encoded)
+		except:
+			pass
+	if img_decoded:
+		if photo.has_key('TYPE'):
+			avatar_mime_type = photo['TYPE']
+			pixbuf = gtkgui_helpers.get_pixbuf_from_data(img_decoded)
+		else:
+			pixbuf, avatar_mime_type = gtkgui_helpers.get_pixbuf_from_data(
+							img_decoded, want_type=True)
+	else:
+		pixbuf = None
+	return pixbuf, avatar_encoded, avatar_mime_type
 
 class ProfileWindow:
 	'''Class for our information window'''
@@ -59,6 +78,10 @@ class ProfileWindow:
 		# Create Image for avatar button
 		image = gtk.Image()
 		self.xml.get_widget('PHOTO_button').set_image(image)
+		text_button = self.xml.get_widget('NOPHOTO_button')
+		# We use 2 buttons because some GTK theme don't show images in buttons
+		text_button.set_no_show_all(True)
+		text_button.hide()
 		self.xml.signal_autoconnect(self)
 		self.window.show_all()
 
@@ -98,21 +121,20 @@ class ProfileWindow:
 		def on_ok(widget, path_to_file):
 			must_delete = False
 			filesize = os.path.getsize(path_to_file) # in bytes
+			#FIXME: use messages for invalid file for 0.11
 			invalid_file = False
 			msg = ''
 			if os.path.isfile(path_to_file):
 				stat = os.stat(path_to_file)
 				if stat[6] == 0:
 					invalid_file = True
-					msg = _('File is empty')
 			else:
 				invalid_file = True
-				msg = _('File does not exist')
 			if not invalid_file and filesize > 16384: # 16 kb
 				try:
 					pixbuf = gtk.gdk.pixbuf_new_from_file(path_to_file)
 					# get the image at 'notification size'
-					# and hope that user did not specify in ACE crazy size
+					# and use that user did not specify in ACE crazy size
 					scaled_pixbuf = gtkgui_helpers.get_scaled_pixbuf(pixbuf,
 						'tooltip')
 				except gobject.GError, msg: # unknown format
@@ -129,17 +151,13 @@ class ProfileWindow:
 							'avatar_scaled.png')
 						scaled_pixbuf.save(path_to_file, 'png')
 						must_delete = True
-			
+			self.dialog.destroy()
+
 			fd = open(path_to_file, 'rb')
 			data = fd.read()
 			pixbuf = gtkgui_helpers.get_pixbuf_from_data(data)
-			try:			
-				# rescale it
-				pixbuf = gtkgui_helpers.get_scaled_pixbuf(pixbuf, 'vcard')
-			except AttributeError: # unknown format
-				dialogs.ErrorDialog(_('Could not load image'))
-				return
-			self.dialog.destroy()
+			# rescale it
+			pixbuf = gtkgui_helpers.get_scaled_pixbuf(pixbuf, 'vcard')
 			self.dialog = None
 			button = self.xml.get_widget('PHOTO_button')
 			image = button.get_image()
@@ -177,8 +195,7 @@ class ProfileWindow:
 			menu = gtk.Menu()
 			
 			# Try to get pixbuf
-			pixbuf = gtkgui_helpers.get_avatar_pixbuf_from_cache(self.jid,
-				use_local = False)
+			pixbuf = gtkgui_helpers.get_avatar_pixbuf_from_cache(self.jid)
 
 			if pixbuf:
 				nick = gajim.config.get_per('accounts', self.account, 'name')
@@ -204,19 +221,19 @@ class ProfileWindow:
 		except AttributeError:
 			pass
 
-	def set_values(self, vcard_):
+	def set_values(self, vcard):
 		button = self.xml.get_widget('PHOTO_button')
 		image = button.get_image()
 		text_button = self.xml.get_widget('NOPHOTO_button')
-		if not 'PHOTO' in vcard_:
+		if not 'PHOTO' in vcard:
 			# set default image
 			image.set_from_pixbuf(None)
 			button.hide()
 			text_button.show()
-		for i in vcard_.keys():
+		for i in vcard.keys():
 			if i == 'PHOTO':
 				pixbuf, self.avatar_encoded, self.avatar_mime_type = \
-					vcard.get_avatar_pixbuf_encoded_mime(vcard_[i])
+					get_avatar_pixbuf_encoded_mime(vcard[i])
 				if not pixbuf:
 					image.set_from_pixbuf(None)
 					button.hide()
@@ -228,21 +245,21 @@ class ProfileWindow:
 				text_button.hide()
 				continue
 			if i == 'ADR' or i == 'TEL' or i == 'EMAIL':
-				for entry in vcard_[i]:
+				for entry in vcard[i]:
 					add_on = '_HOME'
 					if 'WORK' in entry:
 						add_on = '_WORK'
 					for j in entry.keys():
 						self.set_value(i + add_on + '_' + j + '_entry', entry[j])
-			if isinstance(vcard_[i], dict):
-				for j in vcard_[i].keys():
-					self.set_value(i + '_' + j + '_entry', vcard_[i][j])
+			if isinstance(vcard[i], dict):
+				for j in vcard[i].keys():
+					self.set_value(i + '_' + j + '_entry', vcard[i][j])
 			else:
 				if i == 'DESC':
 					self.xml.get_widget('DESC_textview').get_buffer().set_text(
-						vcard_[i], 0)
+						vcard[i], 0)
 				else:
-					self.set_value(i + '_entry', vcard_[i])
+					self.set_value(i + '_entry', vcard[i])
 		if self.update_progressbar_timeout_id is not None:
 			if self.message_id:
 				self.statusbar.remove(self.context_id, self.message_id)
@@ -255,10 +272,10 @@ class ProfileWindow:
 			self.progressbar.set_fraction(0)
 			self.update_progressbar_timeout_id = None
 
-	def add_to_vcard(self, vcard_, entry, txt):
+	def add_to_vcard(self, vcard, entry, txt):
 		'''Add an information to the vCard dictionary'''
 		entries = entry.split('_')
-		loc = vcard_
+		loc = vcard
 		if len(entries) == 3: # We need to use lists
 			if not loc.has_key(entries[0]):
 				loc[entries[0]] = []
@@ -271,14 +288,14 @@ class ProfileWindow:
 				e[entries[2]] = txt
 			else:
 				loc[entries[0]].append({entries[1]: '', entries[2]: txt})
-			return vcard_
+			return vcard
 		while len(entries) > 1:
 			if not loc.has_key(entries[0]):
 				loc[entries[0]] = {}
 			loc = loc[entries[0]]
 			del entries[0]
 		loc[entries[0]] = txt
-		return vcard_
+		return vcard
 
 	def make_vcard(self):
 		'''make the vCard dictionary'''
@@ -289,11 +306,11 @@ class ProfileWindow:
 			'ORG_ORGUNIT', 'TITLE', 'ROLE', 'TEL_WORK_NUMBER', 'EMAIL_WORK_USERID',
 			'ADR_WORK_STREET', 'ADR_WORK_EXTADR', 'ADR_WORK_LOCALITY',
 			'ADR_WORK_REGION', 'ADR_WORK_PCODE', 'ADR_WORK_CTRY']
-		vcard_ = {}
+		vcard = {}
 		for e in entries: 
 			txt = self.xml.get_widget(e + '_entry').get_text().decode('utf-8')
 			if txt != '':
-				vcard_ = self.add_to_vcard(vcard_, e, txt)
+				vcard = self.add_to_vcard(vcard, e, txt)
 
 		# DESC textview
 		buff = self.xml.get_widget('DESC_textview').get_buffer()
@@ -301,14 +318,14 @@ class ProfileWindow:
 		end_iter = buff.get_end_iter()
 		txt = buff.get_text(start_iter, end_iter, 0)
 		if txt != '':
-			vcard_['DESC'] = txt.decode('utf-8')
+			vcard['DESC'] = txt.decode('utf-8')
 
 		# Avatar
 		if self.avatar_encoded:
-			vcard_['PHOTO'] = {'BINVAL': self.avatar_encoded}
+			vcard['PHOTO'] = {'BINVAL': self.avatar_encoded}
 			if self.avatar_mime_type:
-				vcard_['PHOTO']['TYPE'] = self.avatar_mime_type
-		return vcard_
+				vcard['PHOTO']['TYPE'] = self.avatar_mime_type
+		return vcard
 
 	def on_ok_button_clicked(self, widget):
 		if self.update_progressbar_timeout_id:
@@ -319,14 +336,14 @@ class ProfileWindow:
 				_('Without a connection you can not publish your contact '
 				'information.'))
 			return
-		vcard_ = self.make_vcard()
+		vcard = self.make_vcard()
 		nick = ''
-		if vcard_.has_key('NICKNAME'):
-			nick = vcard_['NICKNAME']
+		if vcard.has_key('NICKNAME'):
+			nick = vcard['NICKNAME']
 		if nick == '':
 			nick = gajim.config.get_per('accounts', self.account, 'name')
 		gajim.nicks[self.account] = nick
-		gajim.connections[self.account].send_vcard(vcard_)
+		gajim.connections[self.account].send_vcard(vcard)
 		self.message_id = self.statusbar.push(self.context_id,
 			_('Sending profile...'))
 		self.progressbar.show()

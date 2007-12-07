@@ -1,21 +1,15 @@
 ##	message_control.py
 ##
 ## Copyright (C) 2006 Travis Shirk <travis@pobox.com>
-## Copyright (C) 2007 Stephan Erb <steve-e@h3c.de> 
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 import gtkgui_helpers
 
@@ -40,7 +34,7 @@ class MessageControl:
 		self.widget_name = widget_name
 		self.contact = contact
 		self.account = account
-		self.hide_chat_buttons = False
+		self.hide_chat_buttons_current = False
 		self.resource = resource
 
 		gajim.last_message_time[self.account][self.get_full_jid()] = 0
@@ -62,9 +56,9 @@ class MessageControl:
 	def allow_shutdown(self, method):
 		'''Called to check is a control is allowed to shutdown.
 		If a control is not in a suitable shutdown state this method
-		should return 'no', else 'yes' or 'minimize' '''
+		should return False'''
 		# NOTE: Derived classes MAY implement this
-		return 'yes'
+		return True
 
 	def shutdown(self):
 		# NOTE: Derived classes MUST implement this
@@ -105,7 +99,7 @@ class MessageControl:
 
 	def chat_buttons_set_visible(self, state):
 		# NOTE: Derived classes MAY implement this
-		self.hide_chat_buttons = state
+		self.hide_chat_buttons_current = state
 
 	def got_connected(self):
 		pass
@@ -116,28 +110,14 @@ class MessageControl:
 	def get_specific_unread(self):
 		return len(gajim.events.get_events(self.account, self.contact.jid))
 
-	def set_session(self, session):
-		if session == self.session:
-			return
-
-		if self.session:
-			print "starting a new session, dropping the old one!"
-			gajim.connections[self.account].delete_session(self.session.jid, self.session.thread_id)
-
-		self.session = session
-
 	def send_message(self, message, keyID = '', type = 'chat',
 	chatstate = None, msg_id = None, composing_xep = None, resource = None,
 	user_nick = None):
 		'''Send the given message to the active tab. Doesn't return None if error
 		'''
 		jid = self.contact.jid
-
-		if not self.session:
-			self.session = gajim.connections[self.account].make_new_session(self.contact.get_full_jid())
-
 		# Send and update history
 		return gajim.connections[self.account].send_message(jid, message, keyID,
 			type = type, chatstate = chatstate, msg_id = msg_id,
 			composing_xep = composing_xep, resource = self.resource,
-			user_nick = user_nick, session = self.session)
+			user_nick = user_nick)

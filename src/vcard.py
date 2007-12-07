@@ -1,23 +1,17 @@
 ##	vcard.py (has VcardWindow class and a func get_avatar_pixbuf_encoded_mime)
 ##
-## Copyright (C) 2003-2007 Yann Leboulanger <asterix@lagaule.org>
+## Copyright (C) 2003-2006 Yann Le Boulanger <asterix@lagaule.org>
 ## Copyright (C) 2005-2006 Nikos Kouremenos <kourem@gmail.com>
 ## Copyright (C) 2006 Stefan Bethge <stefan@lanpartei.de>
-## Copyright (C) 2007 Lukas Petrovicky <lukas@petrovicky.net>
 ##
-## This file is part of Gajim.
-##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 # THIS FILE IS FOR **OTHERS'** PROFILE (when we VIEW their INFO)
@@ -27,11 +21,8 @@ import gobject
 import base64
 import time
 import locale
-import os
 
 import gtkgui_helpers
-import dialogs
-import message_control
 
 from common import helpers
 from common import gajim
@@ -87,17 +78,6 @@ class VcardWindow:
 		else:
 			self.real_jid = contact.get_full_jid()
 
-		puny_jid = helpers.sanitize_filename(contact.jid)
-		local_avatar_basepath = os.path.join(gajim.AVATAR_PATH, puny_jid) + \
-			'_local'
-		for extension in ('.png', '.jpeg'):
-			local_avatar_path = local_avatar_basepath + extension
-			if os.path.isfile(local_avatar_path):
-				image = self.xml.get_widget('custom_avatar_image')
-				image.set_from_file(local_avatar_path)
-				image.show()
-				self.xml.get_widget('custom_avatar_label').show()
-				break
 		self.avatar_mime_type = None
 		self.avatar_encoded = None
 		self.vcard_arrived = False
@@ -119,17 +99,6 @@ class VcardWindow:
 		self.progressbar.pulse()
 		return True # loop forever
 
-	def update_avatar_in_gui(self):
-		jid = self.contact.jid
-		# Update roster
-		gajim.interface.roster.draw_avatar(jid, self.account)
-		# Update chat window
-		if gajim.interface.msg_win_mgr.has_window(jid, self.account):
-			win = gajim.interface.msg_win_mgr.get_window(jid, self.account)
-			ctrl = win.get_control(jid, self.account)
-			if win and ctrl.type_id != message_control.TYPE_GC:
-				ctrl.show_avatar()
-
 	def on_vcard_information_window_destroy(self, widget):
 		if self.update_progressbar_timeout_id is not None:
 			gobject.source_remove(self.update_progressbar_timeout_id)
@@ -142,9 +111,26 @@ class VcardWindow:
 			connection.annotations[self.contact.jid] = annotation
 			connection.store_annotations()
 
+
 	def on_vcard_information_window_key_press_event(self, widget, event):
 		if event.keyval == gtk.keysyms.Escape:
 			self.window.destroy()
+
+	def on_log_history_checkbutton_toggled(self, widget):
+		#log conversation history?
+		oldlog = True
+		no_log_for = gajim.config.get_per('accounts', self.account,
+			'no_log_for').split()
+		if self.contact.jid in no_log_for:
+			oldlog = False
+		log = widget.get_active()
+		if not log and not self.contact.jid in no_log_for:
+			no_log_for.append(self.contact.jid)
+		if log and self.contact.jid in no_log_for:
+			no_log_for.remove(self.contact.jid)
+		if oldlog != log:
+			gajim.config.set_per('accounts', self.account, 'no_log_for',
+				' '.join(no_log_for))
 
 	def on_PHOTO_eventbox_button_press_event(self, widget, event):
 		'''If right-clicked, show popup'''
@@ -178,15 +164,12 @@ class VcardWindow:
 			pass
 
 	def set_values(self, vcard):
-		if not 'PHOTO' in vcard:
-			self.xml.get_widget('no_user_avatar_label').show()
 		for i in vcard.keys():
 			if i == 'PHOTO' and self.xml.get_widget('information_notebook').\
 			get_n_pages() > 4:
 				pixbuf, self.avatar_encoded, self.avatar_mime_type = \
 					get_avatar_pixbuf_encoded_mime(vcard[i])
 				image = self.xml.get_widget('PHOTO_image')
-				image.show()
 				if not pixbuf:
 					image.set_from_icon_name('stock_person',
 						gtk.ICON_SIZE_DIALOG)
@@ -253,7 +236,7 @@ class VcardWindow:
 	def fill_status_label(self):
 		if self.xml.get_widget('information_notebook').get_n_pages() < 5:
 			return
-		contact_list = gajim.contacts.get_contacts(self.account, self.contact.jid)
+		contact_list = gajim.contacts.get_contact(self.account, self.contact.jid)
 		connected_contact_list = []
 		for c in contact_list:
 			if c.show not in ('offline', 'error'):
@@ -332,6 +315,14 @@ class VcardWindow:
 				tooltips.set_tip(eb,
 				_("You are waiting contact's answer about your subscription request"))
 
+		log = True
+		if self.contact.jid in gajim.config.get_per('accounts', self.account,
+			'no_log_for').split(' '):
+			log = False
+		checkbutton = self.xml.get_widget('log_history_checkbutton')
+		checkbutton.set_active(log)
+		checkbutton.connect('toggled', self.on_log_history_checkbutton_toggled)
+		
 		resources = '%s (%s)' % (self.contact.resource, unicode(
 			self.contact.priority))
 		uf_resources = self.contact.resource + _(' resource with priority ')\
@@ -364,7 +355,7 @@ class VcardWindow:
 		self.os_info = {0: {'resource': self.contact.resource, 'client': '',
 			'os': ''}}
 		i = 1
-		contact_list = gajim.contacts.get_contacts(self.account, self.contact.jid)
+		contact_list = gajim.contacts.get_contact(self.account, self.contact.jid)
 		if contact_list:
 			for c in contact_list:
 				if c.resource != self.contact.resource:
@@ -424,6 +415,22 @@ class ZeroconfVcardWindow:
 		if event.keyval == gtk.keysyms.Escape:
 			self.window.destroy()
 
+	def on_log_history_checkbutton_toggled(self, widget):
+		#log conversation history?
+		oldlog = True
+		no_log_for = gajim.config.get_per('accounts', self.account,
+			'no_log_for').split()
+		if self.contact.jid in no_log_for:
+			oldlog = False
+		log = widget.get_active()
+		if not log and not self.contact.jid in no_log_for:
+			no_log_for.append(self.contact.jid)
+		if log and self.contact.jid in no_log_for:
+			no_log_for.remove(self.contact.jid)
+		if oldlog != log:
+			gajim.config.set_per('accounts', self.account, 'no_log_for',
+				' '.join(no_log_for))
+
 	def on_PHOTO_eventbox_button_press_event(self, widget, event):
 		'''If right-clicked, show popup'''
 		if event.button == 3: # right click
@@ -457,7 +464,7 @@ class ZeroconfVcardWindow:
 	def fill_status_label(self):
 		if self.xml.get_widget('information_notebook').get_n_pages() < 2:
 			return
-		contact_list = gajim.contacts.get_contacts(self.account, self.contact.jid)
+		contact_list = gajim.contacts.get_contact(self.account, self.contact.jid)
 		# stats holds show and status message
 		stats = ''
 		one = True # Are we adding the first line ?
@@ -492,6 +499,14 @@ class ZeroconfVcardWindow:
 			'</span></b>')
 		self.xml.get_widget('local_jid_label').set_text(self.contact.jid)
 
+		log = True
+		if self.contact.jid in gajim.config.get_per('accounts', self.account,
+			'no_log_for').split(' '):
+			log = False
+		checkbutton = self.xml.get_widget('log_history_checkbutton')
+		checkbutton.set_active(log)
+		checkbutton.connect('toggled', self.on_log_history_checkbutton_toggled)
+		
 		resources = '%s (%s)' % (self.contact.resource, unicode(
 			self.contact.priority))
 		uf_resources = self.contact.resource + _(' resource with priority ')\

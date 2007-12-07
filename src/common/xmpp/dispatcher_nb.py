@@ -23,7 +23,7 @@ Contains one tunable attribute: DefaultTimeout (25 seconds by default). It defin
 Dispatcher.SendAndWaitForResponce method will wait for reply stanza before giving up.
 '''
 
-import simplexml, sys, locale
+import simplexml, sys
 from xml.parsers.expat import ExpatError
 from protocol import *
 from client import PlugIn
@@ -111,9 +111,6 @@ class Dispatcher(PlugIn):
 		self._metastream.setAttr('version', '1.0')
 		self._metastream.setAttr('xmlns:stream', NS_STREAMS)
 		self._metastream.setAttr('to', self._owner.Server)
-		if locale.getdefaultlocale()[0]:
-			self._metastream.setAttr('xml:lang',
-				locale.getdefaultlocale()[0].split('_')[0])
 		self._owner.send("<?xml version='1.0'?>%s>" % str(self._metastream)[:-2])
 
 	def _check_stream_start(self, ns, tag, attrs):
@@ -138,6 +135,7 @@ class Dispatcher(PlugIn):
 				self._owner.Connection.disconnect()
 				return 0
 		except ExpatError:
+			sys.exc_clear()
 			self.DEBUG('Invalid XML received from server. Forcing disconnect.', 'error')
 			self._owner.Connection.pollend()
 			return 0

@@ -10,9 +10,6 @@
 ### but WITHOUT ANY WARRANTY; without even the implied warranty of
 ### MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
 ### Lesser General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ###
 ### You should have received a copy of the GNU Lesser General Public
 ### License along with this library; if not, write to the
@@ -20,7 +17,7 @@
 ### Boston, MA 02111-1307, USA.
 
 
-'''
+"""
 A gtk.TextView-based renderer for XHTML-IM, as described in:
   http://www.jabber.org/jeps/jep-0071.html
 
@@ -29,7 +26,7 @@ I (Santiago Gala) am trying to make it more compatible
 with the markup that docutils generate, and also more
 modular.
 
-'''
+"""
 
 import gobject
 import pango
@@ -52,8 +49,8 @@ import tooltips
 
 __all__ = ['HtmlTextView']
 
-whitespace_rx = re.compile('\\s+')
-allwhitespace_rx = re.compile('^\\s*$')
+whitespace_rx = re.compile("\\s+")
+allwhitespace_rx = re.compile("^\\s*$")
 
 # pixels = points * display_resolution
 display_resolution = 0.3514598*(gtk.gdk.screen_height() /
@@ -86,7 +83,7 @@ element_styles['tt']  = element_styles['kbd']
 element_styles['i']   = element_styles['em']
 element_styles['b']   = element_styles['strong']
 
-'''
+"""
 ==========
   JEP-0071
 ==========
@@ -156,7 +153,7 @@ Common.extra
 #           ( structural     =  br | span )
 #Param/Legacy    param, font, basefont, center, s, strike, u, dir, menu, isindex
 #
-'''
+"""
 
 BLOCK_HEAD = set(( 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', ))
 BLOCK_PHRASAL = set(( 'address', 'blockquote', 'pre', ))
@@ -228,7 +225,7 @@ def build_patterns(view, config, interface):
 
 def _parse_css_color(color):
 	'''_parse_css_color(css_color) -> gtk.gdk.Color'''
-	if color.startswith('rgb(') and color.endswith(')'):
+	if color.startswith("rgb(") and color.endswith(')'):
 		r, g, b = [int(c)*257 for c in color[4:-1].split(',')]
 		return gtk.gdk.Color(r, g, b)
 	else:
@@ -258,15 +255,15 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 
 	def _parse_style_color(self, tag, value):
 		color = _parse_css_color(value)
-		tag.set_property('foreground-gdk', color)
+		tag.set_property("foreground-gdk", color)
 
 	def _parse_style_background_color(self, tag, value):
 		color = _parse_css_color(value)
-		tag.set_property('background-gdk', color)
-		tag.set_property('paragraph-background-gdk', color)
+		tag.set_property("background-gdk", color)
+		if gtk.gtk_version >= (2, 8):
+			tag.set_property("paragraph-background-gdk", color)
 
 
-	#FIXME: when we migrate to 2.10 rm this
 	if gtk.gtk_version >= (2, 8, 5) or gobject.pygtk_version >= (2, 8, 1):
 
 		def _get_current_attributes(self):
@@ -282,7 +279,7 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 		def _get_current_style_attr(self, propname, comb_oper=None):
 			tags = [tag for tag in self.styles if tag is not None]
 			tags.reverse()
-			is_set_name = propname + '-set'
+			is_set_name = propname + "-set"
 			value = None
 			for tag in tags:
 				if tag.get_property(is_set_name):
@@ -295,15 +292,15 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 			return value
 
 		class _FakeAttrs(object):
-			__slots__ = ('font', 'font_scale')
+			__slots__ = ("font", "font_scale")
 
 		def _get_current_attributes(self):
 			attrs = self._FakeAttrs()
-			attrs.font_scale = self._get_current_style_attr('scale',
+			attrs.font_scale = self._get_current_style_attr("scale",
 															operator.mul)
 			if attrs.font_scale is None:
 				attrs.font_scale = 1.0
-			attrs.font = self._get_current_style_attr('font-desc')
+			attrs.font = self._get_current_style_attr("font-desc")
 			if attrs.font is None:
 				attrs.font = self.textview.style.font_desc
 			return attrs
@@ -327,14 +324,14 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				font_size = attrs.font.get_size() / pango.SCALE
 				callback(frac*display_resolution*font_size, *args)
 			elif block_relative:
-				# CSS says 'Percentage values: refer to width of the closest
-				#           block-level ancestor'
+				# CSS says "Percentage values: refer to width of the closest
+				#           block-level ancestor"
 				# This is difficult/impossible to implement, so we use
 				# textview width instead; a reasonable approximation..
 				alloc = self.textview.get_allocation()
 				self.__parse_length_frac_size_allocate(self.textview, alloc,
 													   frac, callback, args)
-				self.textview.connect('size-allocate',
+				self.textview.connect("size-allocate",
 									  self.__parse_length_frac_size_allocate,
 									  frac, callback, args)
 			else:
@@ -373,9 +370,9 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				callback(val, *args)
 			except:
 				warnings.warn('Unable to parse length value "%s"' % value)
-		
+
 	def __parse_font_size_cb(length, tag):
-		tag.set_property('size-points', length/display_resolution)
+		tag.set_property("size-points", length/display_resolution)
 	__parse_font_size_cb = staticmethod(__parse_font_size_cb)
 
 	def _parse_style_display(self, tag, value):
@@ -386,25 +383,25 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 	def _parse_style_font_size(self, tag, value):
 		try:
 			scale = {
-				'xx-small': pango.SCALE_XX_SMALL,
-				'x-small': pango.SCALE_X_SMALL,
-				'small': pango.SCALE_SMALL,
-				'medium': pango.SCALE_MEDIUM,
-				'large': pango.SCALE_LARGE,
-				'x-large': pango.SCALE_X_LARGE,
-				'xx-large': pango.SCALE_XX_LARGE,
+				"xx-small": pango.SCALE_XX_SMALL,
+				"x-small": pango.SCALE_X_SMALL,
+				"small": pango.SCALE_SMALL,
+				"medium": pango.SCALE_MEDIUM,
+				"large": pango.SCALE_LARGE,
+				"x-large": pango.SCALE_X_LARGE,
+				"xx-large": pango.SCALE_XX_LARGE,
 				} [value]
 		except KeyError:
 			pass
 		else:
 			attrs = self._get_current_attributes()
-			tag.set_property('scale', scale / attrs.font_scale)
+			tag.set_property("scale", scale / attrs.font_scale)
 			return
 		if value == 'smaller':
-			tag.set_property('scale', pango.SCALE_SMALL)
+			tag.set_property("scale", pango.SCALE_SMALL)
 			return
 		if value == 'larger':
-			tag.set_property('scale', pango.SCALE_LARGE)
+			tag.set_property("scale", pango.SCALE_LARGE)
 			return
 		# font relative (5 ~ 4pt, 110 ~ 72pt)
 		self._parse_length(value, True, False, 5, 110, self.__parse_font_size_cb, tag)
@@ -412,14 +409,14 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 	def _parse_style_font_style(self, tag, value):
 		try:
 			style = {
-				'normal': pango.STYLE_NORMAL,
-				'italic': pango.STYLE_ITALIC,
-				'oblique': pango.STYLE_OBLIQUE,
+				"normal": pango.STYLE_NORMAL,
+				"italic": pango.STYLE_ITALIC,
+				"oblique": pango.STYLE_OBLIQUE,
 				} [value]
 		except KeyError:
-			warnings.warn('unknown font-style %s' % value)
+			warnings.warn("unknown font-style %s" % value)
 		else:
-			tag.set_property('style', style)
+			tag.set_property("style", style)
 
 	def __frac_length_tag_cb(self,length, tag, propname):
 		styles = self._get_style_tags()
@@ -431,12 +428,12 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 	def _parse_style_margin_left(self, tag, value):
 		# block relative
 		self._parse_length(value, False, True, 1, 1000, self.__frac_length_tag_cb,
-						   tag, 'left-margin')
+						   tag, "left-margin")
 
 	def _parse_style_margin_right(self, tag, value):
 		# block relative
 		self._parse_length(value, False, True, 1, 1000, self.__frac_length_tag_cb,
-						   tag, 'right-margin')
+						   tag, "right-margin")
 
 	def _parse_style_font_weight(self, tag, value):
 		# TODO: missing 'bolder' and 'lighter'
@@ -455,12 +452,12 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				'bold': pango.WEIGHT_BOLD,
 				} [value]
 		except KeyError:
-			warnings.warn('unknown font-style %s' % value)
+			warnings.warn("unknown font-style %s" % value)
 		else:
-			tag.set_property('weight', weight)
+			tag.set_property("weight", weight)
 
 	def _parse_style_font_family(self, tag, value):
-		tag.set_property('family', value)
+		tag.set_property("family", value)
 
 	def _parse_style_text_align(self, tag, value):
 		try:
@@ -471,36 +468,36 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				'justify': gtk.JUSTIFY_FILL,
 				} [value]
 		except KeyError:
-			warnings.warn('Invalid text-align:%s requested' % value)
+			warnings.warn("Invalid text-align:%s requested" % value)
 		else:
-			tag.set_property('justification', align)
+			tag.set_property("justification", align)
 	
 	def _parse_style_text_decoration(self, tag, value):
-		if value == 'none':
-			tag.set_property('underline', pango.UNDERLINE_NONE)
-			tag.set_property('strikethrough', False)
-		elif value == 'underline':
-			tag.set_property('underline', pango.UNDERLINE_SINGLE)
-			tag.set_property('strikethrough', False)
-		elif value == 'overline':
-			warnings.warn('text-decoration:overline not implemented')
-			tag.set_property('underline', pango.UNDERLINE_NONE)
-			tag.set_property('strikethrough', False)
-		elif value == 'line-through':
-			tag.set_property('underline', pango.UNDERLINE_NONE)
-			tag.set_property('strikethrough', True)
-		elif value == 'blink':
-			warnings.warn('text-decoration:blink not implemented')
+		if value == "none":
+			tag.set_property("underline", pango.UNDERLINE_NONE)
+			tag.set_property("strikethrough", False)
+		elif value == "underline":
+			tag.set_property("underline", pango.UNDERLINE_SINGLE)
+			tag.set_property("strikethrough", False)
+		elif value == "overline":
+			warnings.warn("text-decoration:overline not implemented")
+			tag.set_property("underline", pango.UNDERLINE_NONE)
+			tag.set_property("strikethrough", False)
+		elif value == "line-through":
+			tag.set_property("underline", pango.UNDERLINE_NONE)
+			tag.set_property("strikethrough", True)
+		elif value == "blink":
+			warnings.warn("text-decoration:blink not implemented")
 		else:
-			warnings.warn('text-decoration:%s not implemented' % value)
+			warnings.warn("text-decoration:%s not implemented" % value)
 	
 	def _parse_style_white_space(self, tag, value):
 		if value == 'pre':
-			tag.set_property('wrap_mode', gtk.WRAP_NONE)
+			tag.set_property("wrap_mode", gtk.WRAP_NONE)
 		elif value == 'normal':
-			tag.set_property('wrap_mode', gtk.WRAP_WORD)
+			tag.set_property("wrap_mode", gtk.WRAP_WORD)
 		elif value == 'nowrap':
-			tag.set_property('wrap_mode', gtk.WRAP_NONE)
+			tag.set_property("wrap_mode", gtk.WRAP_NONE)
 
 	def __length_tag_cb(self, value, tag, propname):
 		try:
@@ -528,9 +525,9 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				  'text-align', 'text-decoration', 'white-space', 'display',
 				  'width', 'height' ]:
 		try:
-			method = locals()['_parse_style_%s' % style.replace('-', '_')]
+			method = locals()["_parse_style_%s" % style.replace('-', '_')]
 		except KeyError:
-			warnings.warn('Style attribute "%s" not yet implemented' % style)
+			warnings.warn("Style attribute '%s' not yet implemented" % style)
 		else:
 			__style_methods[style] = method
 	del style
@@ -689,8 +686,8 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 			try:
 				method = self.__style_methods[attr]
 			except KeyError:
-				warnings.warn('Style attribute "%s" requested '
-							  'but not yet implemented' % attr)
+				warnings.warn("Style attribute '%s' requested "
+							  "but not yet implemented" % attr)
 			else:
 				method(self, tag, val)
 		self.styles.append(tag)
@@ -721,11 +718,11 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 			text = text.replace('\n', ' ')
 			self.handle_specials(whitespace_rx.sub(' ', text))
 		else:
-			self._insert_text(text.strip('\n'))
+			self._insert_text(text.strip("\n"))
 
 	def _anchor_event(self, tag, textview, event, iter, href, type_):
 		if event.type == gtk.gdk.BUTTON_PRESS:
-			self.textview.emit('url-clicked', href, type_)
+			self.textview.emit("url-clicked", href, type_)
 			return True
 		return False
 
@@ -759,7 +756,7 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				if special_text.startswith('/'): # it's explicit italics
 					self.startElement('i', {})
 				elif special_text.startswith('_'): # it's explicit underline
-					self.startElement('u', {})
+					self.startElement("u", {})
 				if se: self._insert_text(special_text[0])
 				self.handle_specials(special_text[1:-1])
 				if se: self._insert_text(special_text[0])
@@ -848,7 +845,7 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 				li_head = unichr(0x2022)
 			else:
 				self.list_counters[-1] += 1
-				li_head = '%i.' % self.list_counters[-1]
+				li_head = "%i." % self.list_counters[-1]
 			self.text = ' '*len(self.list_counters)*4 + li_head + ' '
 			self._flush_text()
 			self.starting = True
@@ -862,7 +859,7 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 		elif name in INLINE:
 			pass
 		else:
-			warnings.warn('Unhandled element "%s"' % name)
+			warnings.warn("Unhandled element '%s'" % name)
 
 	def endElement(self, name):
 		endPreserving = False
@@ -874,10 +871,10 @@ class HtmlHandler(xml.sax.handler.ContentHandler):
 			self._jump_line()
 			try:
 				self.textbuf.insert_pixbuf(self.iter, self.textview.focus_out_line_pixbuf)
-				#self._insert_text(u'\u2550'*40)
+				#self._insert_text(u"\u2550"*40)
 				self._jump_line()
 			except Exception, e:
-				gajim.log.debug(str('Error in hr'+e))
+				gajim.log.debug(str("Error in hr"+e))
 		elif name in LIST_ELEMS:
 			self.list_counters.pop()
 		elif name == 'li':
@@ -989,8 +986,10 @@ class HtmlTextView(gtk.TextView):
 		
 		# too much space after :)
 		#if not eob.starts_line():
-		#    buffer.insert(eob, '\n')
+		#    buffer.insert(eob, "\n")
 
+if gobject.pygtk_version < (2, 8):
+	gobject.type_register(HtmlTextView)
 
 
 change_cursor = None
@@ -1067,25 +1066,25 @@ if __name__ == '__main__':
 						  '  <img src="http://images.slashdot.org/topics/topicsoftware.gif"/><br/>\n'
 						  '  <span style="font-size: 500%; font-family: serif">World</span>\n'
 						  '</div>\n')
-	htmlview.display_html('<hr />')
-	htmlview.display_html('''
+	htmlview.display_html("<hr />")
+	htmlview.display_html("""
 	  <p style='font-size:large'>
 		<span style='font-style: italic'>O<span style='font-size:larger'>M</span>G</span>, 
 		I&apos;m <span style='color:green'>green</span>
 		with <span style='font-weight: bold'>envy</span>!
 	  </p>
-		''')
-	htmlview.display_html('<hr />')
-	htmlview.display_html('''
+		""")
+	htmlview.display_html("<hr />")
+	htmlview.display_html("""
 	<body xmlns='http://www.w3.org/1999/xhtml'>
 	  <p>As Emerson said in his essay <span style='font-style: italic; background-color:cyan'>Self-Reliance</span>:</p>
 	  <p style='margin-left: 5px; margin-right: 2%'>
 		&quot;A foolish consistency is the hobgoblin of little minds.&quot;
 	  </p>
 	</body>
-		''')
-	htmlview.display_html('<hr />')
-	htmlview.display_html('''
+		""")
+	htmlview.display_html("<hr />")
+	htmlview.display_html("""
 	<body xmlns='http://www.w3.org/1999/xhtml'>
 	  <p style='text-align:center'>Hey, are you licensed to <a href='http://www.jabber.org/'>Jabber</a>?</p>
 	  <p style='text-align:right'><img src='http://www.jabber.org/images/psa-license.jpg'
@@ -1093,9 +1092,9 @@ if __name__ == '__main__':
 			  width='50%' height='50%' 
 			  /></p>
 	</body>
-		''')
-	htmlview.display_html('<hr />')
-	htmlview.display_html('''
+		""")
+	htmlview.display_html("<hr />")
+	htmlview.display_html("""
 	<body xmlns='http://www.w3.org/1999/xhtml'>
 	  <ul style='background-color:rgb(120,140,100)'>
 	   <li> One </li>
@@ -1105,12 +1104,12 @@ if __name__ == '__main__':
   def faciter(n,acc): 
 	if n==0: return acc
 	return faciter(n-1, acc*n)
-  if n&lt;0: raise ValueError('Must be non-negative')
+  if n&lt;0: raise ValueError("Must be non-negative")
   return faciter(n,1)</pre>
 	</body>
-		''')
-	htmlview.display_html('<hr />')
-	htmlview.display_html('''
+		""")
+	htmlview.display_html("<hr />")
+	htmlview.display_html("""
 	<body xmlns='http://www.w3.org/1999/xhtml'>
 	 <ol style='background-color:rgb(120,140,100)'>
 	   <li> One </li>
@@ -1122,12 +1121,12 @@ if __name__ == '__main__':
 			</ul></li>
 	   <li> Three </li></ol>
 	</body>
-		''')
+		""")
 	htmlview.show()
 	sw = gtk.ScrolledWindow()
-	sw.set_property('hscrollbar-policy', gtk.POLICY_AUTOMATIC)
-	sw.set_property('vscrollbar-policy', gtk.POLICY_AUTOMATIC)
-	sw.set_property('border-width', 0)
+	sw.set_property("hscrollbar-policy", gtk.POLICY_AUTOMATIC)
+	sw.set_property("vscrollbar-policy", gtk.POLICY_AUTOMATIC)
+	sw.set_property("border-width", 0)
 	sw.add(htmlview)
 	sw.show()
 	frame = gtk.Frame()
@@ -1138,5 +1137,5 @@ if __name__ == '__main__':
 	w.add(frame)
 	w.set_default_size(400, 300)
 	w.show_all()
-	w.connect('destroy', lambda w: gtk.main_quit())
+	w.connect("destroy", lambda w: gtk.main_quit())
 	gtk.main()

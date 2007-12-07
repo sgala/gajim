@@ -1,24 +1,17 @@
 ## common/contacts.py
 ##
-## Copyright (C) 2006 Yann Leboulanger <asterix@lagaule.org>
-##                    Nikos Kouremenos <kourem@gmail.com>
-## Copyright (C) 2007 Lukas Petrovicky <lukas@petrovicky.net>
-##                    Julien Pivotto <roidelapluie@gmail.com>
-##                    Stephan Erb <steve-e@h3c.de> 
+## Copyright (C) 2006 Yann Le Boulanger <asterix@lagaule.org>
+## Copyright (C) 2006 Nikos Kouremenos <kourem@gmail.com>
 ##
-## This file is part of Gajim.
 ##
-## Gajim is free software; you can redistribute it and/or modify
+## This program is free software; you can redistribute it and/or modify
 ## it under the terms of the GNU General Public License as published
-## by the Free Software Foundation; version 3 only.
+## by the Free Software Foundation; version 2 only.
 ##
-## Gajim is distributed in the hope that it will be useful,
+## This program is distributed in the hope that it will be useful,
 ## but WITHOUT ANY WARRANTY; without even the implied warranty of
 ## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 ## GNU General Public License for more details.
-##
-## You should have received a copy of the GNU General Public License
-## along with Gajim.  If not, see <http://www.gnu.org/licenses/>.
 ##
 
 import common.gajim
@@ -39,12 +32,6 @@ class Contact:
 		self.resource = resource
 		self.priority = priority
 		self.keyID = keyID
-
-		# Capabilities; filled by caps.py/ConnectionCaps object
-		# every time it gets these from presence stanzas
-		self.caps_node = None
-		self.caps_ver = None
-		self.caps_exts = None
 
 		# please read jep-85 http://www.jabber.org/jeps/jep-0085.html
 		# we keep track of jep85 support with the peer by three extra states:
@@ -97,11 +84,6 @@ class Contact:
 		and self.is_hidden_from_roster():
 			is_observer = True
 		return is_observer
-
-	def is_groupchat(self):
-		if _('Groupchats') in self.groups:
-			return True
-		return False
 
 	def is_transport(self):
 		# if not '@' or '@' starts the jid then contact is transport
@@ -220,28 +202,28 @@ class Contacts:
 		# remove metacontacts info
 		self.remove_metacontact(account, jid)
 
-	def get_contacts(self, account, jid):
-		'''Returns the list of contact instances for this jid.'''
-		if jid in self._contacts[account]:
-			return self._contacts[account][jid]
-		else:
-			return []
-	
 	def get_contact(self, account, jid, resource = None):
-		'''Returns the contact instance for the given resource if it's given else
-		the first contact is no resource is given or None if there is not'''
+		'''Returns the list of contact instances for this jid (one per resource)
+		or [] if no resource is given
+		returns the contact instance for the given resource if it's given
+		or None if there is not'''
 		if jid in self._contacts[account]:
+			contacts = self._contacts[account][jid]
 			if not resource:
-				return self._contacts[account][jid][0]
-			for c in self._contacts[account][jid]:
+				return contacts
+			for c in contacts:
 				if c.resource == resource:
 					return c
-		return None
+		if resource:
+			return None
+		return []
 
-	def get_contact_from_full_jid(self, account, fjid):
-		''' Get Contact object for specific resource of given jid'''
-		barejid, resource = common.gajim.get_room_and_nick_from_fjid(fjid)
-		return self.get_contact(account, barejid, resource)
+	def get_contacts_from_jid(self, account, jid):
+		'''we may have two or more resources on that jid'''
+		if jid in self._contacts[account]:
+			contacts_instances = self._contacts[account][jid]
+			return contacts_instances
+		return []
 
 	def get_highest_prio_contact_from_contacts(self, contacts):
 		if not contacts:
@@ -253,7 +235,7 @@ class Contacts:
 		return prim_contact
 
 	def get_contact_with_highest_priority(self, account, jid):
-		contacts = self.get_contacts(account, jid)
+		contacts = self.get_contacts_from_jid(account, jid)
 		if not contacts and '/' in jid:
 			# jid may be a fake jid, try it
 			room, nick = jid.split('/', 1)
@@ -270,7 +252,7 @@ class Contacts:
 		'''Returns all contacts in the given group'''
 		group_contacts = []
 		for jid in self._contacts[account]:
-			contacts = self.get_contacts(account, jid)
+			contacts = self.get_contacts_from_jid(account, jid)
 			if group in contacts[0].groups:
 				group_contacts += contacts
 		return group_contacts
@@ -285,10 +267,6 @@ class Contacts:
 		for account in accounts:
 			our_jid = common.gajim.get_jid_from_account(account)
 			for jid in self.get_jid_list(account):
-				if self.has_brother(account, jid) and not \
-					self.is_big_brother(account, jid):
-					# count metacontacts only once
-					continue
 				if jid == our_jid:
 					continue
 				if common.gajim.jid_is_transport(jid) and not \
@@ -308,8 +286,6 @@ class Contacts:
 						# Transports group
 						if common.gajim.jid_is_transport(jid):
 							contact_groups = [_('Transports')]
-						if contact.is_observer():
-							contact_groups = [_('Observers')]
 						else:
 							contact_groups = [_('General')]
 					for group in groups:
@@ -372,7 +348,7 @@ class Contacts:
 					found = data
 					break
 			if found:
-				self._metacontacts_tags[account][tag].remove(found)
+				self._metacontacts_tags[account][tag].remove(data)
 				break
 		common.gajim.connections[account].store_metacontacts(
 			self._metacontacts_tags[account])
@@ -381,17 +357,6 @@ class Contacts:
 		for account in self._metacontacts_tags:
 			tag = self.get_metacontacts_tag(account, jid)
 			if tag and len(self._metacontacts_tags[account][tag]) > 1:
-				return True
-		return False
-
-	def is_big_brother(self, account, jid):
-		tag = self.get_metacontacts_tag(account, jid)
-		if tag:
-			family = self.get_metacontacts_family(account, jid)
-			bb_data = self.get_metacontacts_big_brother(family)
-			bb_jid = bb_data['jid']
-			bb_account = bb_data['account']
-			if bb_jid == jid and bb_account == account: 
 				return True
 		return False
 
