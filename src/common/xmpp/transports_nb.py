@@ -38,7 +38,7 @@ from common import gajim
 USE_PYOPENSSL = False
 
 try:
-	#raise ImportError("Manually disabled PyOpenSSL")
+	raise ImportError("Manually disabled PyOpenSSL")
 	import OpenSSL.SSL
 	import OpenSSL.crypto
 	USE_PYOPENSSL = True
