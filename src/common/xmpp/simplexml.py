@@ -19,10 +19,20 @@ I'm personally using it in many other separate projects. It is designed to be as
 
 import xml.parsers.expat
 
+# #x0 to #x8, #xB, #xC, #xE, #xF, #x10-#x1F, plus #xFFFE and #xFFFF
+ENTITIES={
+        '"': '&quot;',
+	#'\'': '&#39;',
+	}
+for i in range(0,32):
+	if i in (9,10): continue
+	ENTITIES[unichr(i)] = u'&#'+unicode(i)
 def XMLescape(txt):
 	"""Returns provided string with symbols & < > " replaced by their respective XML entities."""
+	from xml.sax import saxutils
 	# replace also FORM FEED and ESC, because they are not valid XML chars
-	return txt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace(u'\x0C', "").replace(u'\x1B', "")
+	#return txt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;").replace(u'\x0C', "").replace(u'\x1B', "")
+	return saxutils.escape(txt, ENTITIES)
 
 ENCODING='utf-8'
 def ustr(what):
