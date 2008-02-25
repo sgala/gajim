@@ -189,7 +189,7 @@ class Browser(PlugIn):
             self.DEBUG("No Handler for request with jid->%s node->%s ns->%s"%(request.getTo(),request.getQuerynode(),request.getQueryNS()),'error')
             conn.send(Error(request,ERR_ITEM_NOT_FOUND))
             raise NodeProcessed
-        self.DEBUG("Handling request with jid->%s node->%s ns->%s"%(request.getTo(),request.getQuerynode(),request.getQueryNS()),'ok')
+        self.DEBUG((u"Handling request with jid->%s node->%s ns->%s"%(request.getTo(),request.getQuerynode(),request.getQueryNS())).encode('utf-8'),'ok')
         rep=request.buildReply('result')
         if request.getQuerynode(): rep.setQuerynode(request.getQuerynode())
         q=rep.getTag('query')
