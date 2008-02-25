@@ -20,6 +20,7 @@
 import sys
 import os
 import re
+import socket
 
 from xmpp.idlequeue import *
 
@@ -96,8 +97,12 @@ class Resolver:
 						prop_value = prop_value[:-1]
 					current_host['host'] = prop_value
 				if len(current_host) == 4:
-					hosts.append(current_host)
-					current_host = None
+					try:
+						for ai in socket.getaddrinfo(current_host['host'],current_host['port'],socket.AF_UNSPEC,socket.SOCK_STREAM):
+							hosts.append(current_host)
+							hosts[-1]['ai'] = ai
+					finally:
+						current_host = None
 		return hosts
 	
 	def _parse_srv_result_posix(self, fqdn, result):
@@ -129,8 +134,12 @@ class Resolver:
 					port = int(port)
 				except ValueError:
 					continue
-				hosts.append({'host': host, 'port': port,'weight': weight,
-						'prio': prio})
+				try:
+					for ai in socket.getaddrinfo(host,port,socket.AF_UNSPEC,socket.SOCK_STREAM):
+						hosts.append({'host': host, 'port': port,'weight': weight,
+									'prio': prio, 'ai':ai})
+				except:
+					print "GAI failed", host, port
 		return hosts
 	
 	def _on_ready(self, host, result):
@@ -290,6 +299,97 @@ class NsLookup(IdleCommand):
 		if self.result_handler:
 			self.result_handler(self.host, self.result)
 		self.result_handler = None
+
+class GetAddrInfo(IdleCommand):
+	def __init__(self, on_result, host='_xmpp-client', port=5222, type = 'srv'):
+		IdleCommand.__init__(self, on_result)
+		self.commandtimeout = 10 
+		self.host = host.lower()
+		self.port = port
+		self.type = type.lower()
+		if not host_pattern.match(self.host):
+			# invalid host name
+			print >> sys.stderr, 'Invalid host: %s' % self.host
+			self.canexecute = False
+			return
+		if not ns_type_pattern.match(self.type):
+			print >> sys.stderr, 'Invalid querytype: %s' % self.type
+			self.canexecute = False
+			return
+	def start(self):
+		if not self.canexecute:
+			self.result = None
+			self._return_result()
+			return
+		def do_work():
+			print "in do_work"
+			try:
+			  self.result = socket.getaddrinfo(self.host,
+						self.port,
+						socket.AF_UNSPEC,
+						socket.SOCK_STREAM)
+			except:
+				print "Error", sys.exc_info()
+			finally:
+				print "Ended"
+			print "after do_work"
+			self.end()
+		print "before start_new_thread"
+		import threading
+		t = threading.Thread(target=do_work)
+		print t
+		t.start()
+		print "the thread is running"
+	def pollin(self):
+		if self.result != None:
+			self.end()
+	def end(self):
+		#self.idlequeue.unplug_idle(self.fd)
+		print "in self.end", self.result
+
+
+class AIResolver:
+	def __init__(self, idlequeue):
+		self.idlequeue = idlequeue
+		# dict {host : list of addrinfo records}
+		self.resolved_hosts = {} 
+		# dict {host : list of callbacks}
+		self.handlers = {}
+	def start_resolve(self, host,port):
+		''' spawn new nslookup process and start waiting for results '''
+		ns = GetAddrInfo(self._on_ready, host,port)
+		ns.set_idlequeue(self.idlequeue)
+		ns.commandtimeout = 10
+		ns.start()
+	def resolve(self, host, port, on_ready):
+		if host == '': # None means localhost
+			# empty host, return empty list of srv records
+			on_ready([])
+			return
+		if host in self.resolved_hosts:
+			# host is already resolved, return cached values
+			on_ready(host, self.resolved_hosts[host])
+			return
+		if host in self.handlers:
+			# host is about to be resolved by another connection,
+			# attach our callback (FIXME: synced on self.handlers)
+			self.handlers[host].append(on_ready)
+		else:
+			# host has never been resolved, start now
+			self.handlers[host] = [on_ready]
+			self.start_resolve(host,port)
+	def _on_ready(self, host, result):
+		print "AIResolver:", host, result
+		# practically it is impossible to be the opposite, but who knows :)
+		if not host in self.resolved_hosts:
+			self.resolved_hosts[host] = result_list
+		if host in self.handlers:
+			for callback in self.handlers[host]:
+				callback(host, result_list)
+			del self.handlers[host]
+	
+
+
 	
 # below lines is on how to use API and assist in testing
 if __name__ == '__main__':
@@ -301,14 +401,16 @@ if __name__ == '__main__':
 	import gobject
 	import gtk
 	
-	resolver = Resolver(idlequeue)
+	#resolver = Resolver(idlequeue)
+	resolver = AIResolver(idlequeue)
 	
 	def clicked(widget):
 		global resolver
 		host = text_view.get_text()
+		port = 5222
 		def on_result(host, result_array):
 			print 'Result:\n' + repr(result_array)
-		resolver.resolve(host, on_result)
+		resolver.resolve(host, port, on_result)
 	win = gtk.Window()
 	win.set_border_width(6)
 	text_view = gtk.Entry()
@@ -321,5 +423,6 @@ if __name__ == '__main__':
 	but.connect('clicked', clicked)
 	win.add(hbox)
 	win.show_all()
-	gobject.timeout_add(200, idlequeue.process)
+	win.connect('destroy', lambda w: gtk.main_quit())
+	gobject.timeout_add(500, idlequeue.process)
 	gtk.main()
