@@ -253,7 +253,8 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		self.printed_error = False
 		
 		#  0 - not connected
-		#  1 - connected
+		#  1 - connecting
+		#  2 - connected
 		# -1 - about to disconnect (when we wait for final events to complete)
 		# -2 - disconnected
 		self.state = 0
@@ -274,6 +275,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		# This prevents replug of same object with the same flags
 		self.writable = True
 		self.readable = False
+		self.ais = None
 	
 	def plugin(self, owner):
 		''' Fire up connection. Return non-empty string on success.
@@ -307,19 +309,15 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		self.state = 0
 		success = False
 		try:
-			for ai in socket.getaddrinfo(server[0],server[1],socket.AF_UNSPEC,socket.SOCK_STREAM):
-				try:
-					self._sock=socket.socket(*ai[:3])
-					self._sock.setblocking(False)
-					self._server=ai[4]
-					success = True
-					break
-				except:
-					if sys.exc_value[0] == errno.EINPROGRESS:
-						success = True
-						break
-					#for all errors, we try other addresses
-					continue
+			self.set_timeout(CONNECT_TIMEOUT_SECONDS)
+			if len(server) == 2 and type(server[0]) in (str, unicode) and not self.ais:
+				# FIXME: blocks here
+				print "blocking getaddrinfo", server
+				self.ais = socket.getaddrinfo(server[0],server[1],socket.AF_UNSPEC,socket.SOCK_STREAM)
+				#print "self.ais=", self.ais 
+			else:
+				self.ais = (server,)
+			return self._do_connect()
 		except socket.gaierror, e:
 			log.info("Lookup failure for %s: %s[%s]", self.getName(), e[1], repr(e[0]), exc_info=True)
 		except:
@@ -328,13 +326,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		if not success:
 			if self.on_connect_failure:
 				self.on_connect_failure()
-			return False
-
-		self.fd = self._sock.fileno()
-		self.idlequeue.plug_idle(self, True, False)
-		self.set_timeout(CONNECT_TIMEOUT_SECONDS)
-		self._do_connect()
-		return True
+		return success
 	
 	def _plug_idle(self):
 		readable = self.state != 0
@@ -540,46 +532,62 @@ class NonBlockingTcp(PlugIn, IdleObject):
 
 	def _do_connect(self):
 		if self.state != 0:
+			print "do_connect while connected"
 			return
-		self._sock.setblocking(False)
-		self._send = self._sock.send
-		self._recv = self._sock.recv
-		errnum = 0
-		try:
-			self._sock.connect(self._server)
-		except socket.error, e:
-			errnum = e[0]
+		for ai in self.ais:
+			success = False
+			try:
+				self._sock=socket.socket(*ai[:3])
+				self._sock.setblocking(False)
+				self._server=ai[4]
+				self.fd = self._sock.fileno()
+				self.idlequeue.plug_idle(self, True, False)
+				self._send = self._sock.send
+				self._recv = self._sock.recv
+				errnum = 0
 
-			# Ignore "Socket already connected". 
-			# FIXME: This happens when we switch an already
-			# connected socket to SSL (STARTTLS). Instead of
-			# ignoring the error, the socket should only be
-			# connected to once. See #2846 and #3396.
-			workaround = (errno.EALREADY, 10056, 56)
+				self._sock.connect(self._server)
+				print "connected"
+				success = True
+				self.state = 1
+				break
+			except socket.error, e:
+				#print "exception1",sys.exc_value
+				errnum = e[0]
 
-			# 10035 - winsock equivalent of EINPROGRESS
-			if errnum not in (errno.EINPROGRESS, 10035) + workaround:
-				log.error("_do_connect:", exc_info=True)
-				#traceback.print_exc()
-		# in progress, or would block
-		if errnum in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK): 
-			return
-		# 10056  - already connected, only on win32
-		# code 'WS*' is not available on GNU, so we use its numeric value
-		elif errnum not in (0, 10056, errno.EISCONN): 
-			self.remove_timeout()
+				# Ignore "Socket already connected". 
+				# FIXME: This happens when we switch an already
+				# connected socket to SSL (STARTTLS). Instead of
+				# ignoring the error, the socket should only be
+				# connected to once. See #2846 and #3396.
+				workaround = (errno.EALREADY, 10056, 56)
+
+				# 10035 - winsock equivalent of EINPROGRESS
+				if errnum not in (errno.EINPROGRESS, 10035) + workaround:
+					log.error("_do_connect:", exc_info=True)
+					#traceback.print_exc()
+				# in progress, or would block
+				if errnum in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK):
+					success = True
+					self.state = 1
+					break
+				# 10056  - already connected, only on win32
+				# code 'WS*' is not available on GNU, so we use its numeric value
+				elif errnum not in (0, 10056, errno.EISCONN): 
+					continue
+
+		self.remove_timeout()
+		if not success:
 			if self.on_connect_failure:
 				self.on_connect_failure()
 			return
-		self.remove_timeout()
 		self._owner.Connection=self
 		self.state = 1
-		
 		self._sock.setblocking(False)
 		self._plug_idle()
 		if self.on_connect:
 			self.on_connect()
-			self.on_connect = None
+		self.on_connect = None
 		return True
 
 	def send(self, raw_data, now = False):
@@ -741,8 +749,8 @@ class NonBlockingTLS(PlugIn):
 		log.debug("_startSSL_pyOpenSSL called")
 		tcpsock = self._owner.Connection
 		# FIXME: should method be configurable?
-		tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.TLSv1_METHOD)
-		#tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv23_METHOD)
+		#tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.TLSv1_METHOD)
+		tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv23_METHOD)
 		tcpsock.ssl_errnum = 0
 		tcpsock._sslContext.set_verify(OpenSSL.SSL.VERIFY_PEER, self._ssl_verify_callback)
 		cacerts = os.path.join(gajim.DATA_DIR, 'other', 'cacerts.pem')
