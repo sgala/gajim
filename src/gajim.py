@@ -678,6 +678,7 @@ class Interface:
 			# It must be an agent
 			if ji in jid_list:
 				# Update existing iter
+				self.roster.modelfilter.refilter()
 				self.roster.draw_contact(ji, account)
 				self.roster.draw_group(_('Transports'), account)
 				if new_show > 1 and ji in gajim.transport_avatar[account]:
@@ -1113,15 +1114,16 @@ class Interface:
 		if win and ctrl.type_id != message_control.TYPE_GC:
 			ctrl.show_avatar()
 
+		room_jid, nick = gajim.get_room_and_nick_from_fjid(jid)
 		# Show avatar in roster or gc_roster
-		gc_ctrl = self.msg_win_mgr.get_control(jid, account)
+		gc_ctrl = self.msg_win_mgr.get_control(room_jid, account)
 		if not gc_ctrl and \
-		jid in self.minimized_controls[account]:
-			gc_ctrl = self.minimized_controls[account][jid]
+		room_jid in self.minimized_controls[account]:
+			gc_ctrl = self.minimized_controls[account][room_jid]
 		if gc_ctrl and gc_ctrl.type_id == message_control.TYPE_GC:
-			gc_ctrl.draw_avatar(resource)
+			gc_ctrl.draw_avatar(nick)
 		else:
-			self.roster.draw_avatar(jid, account)
+			self.roster.draw_avatar_from_jid(jid, account)
 		if self.remote_ctrl:
 			self.remote_ctrl.raise_signal('VcardInfo', (account, vcard))
 

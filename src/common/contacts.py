@@ -244,6 +244,11 @@ class Contacts:
 					return c
 		return None
 
+	def iter_contacts(self, account):
+		for jid in self._contacts[account]:
+			for contact in self._contacts[account][jid]:
+				yield contact
+
 	def get_contact_from_full_jid(self, account, fjid):
 		''' Get Contact object for specific resource of given jid'''
 		barejid, resource = common.gajim.get_room_and_nick_from_fjid(fjid)
