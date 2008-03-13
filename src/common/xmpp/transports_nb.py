@@ -741,8 +741,8 @@ class NonBlockingTLS(PlugIn):
 		log.debug("_startSSL_pyOpenSSL called")
 		tcpsock = self._owner.Connection
 		# FIXME: should method be configurable?
-		tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.TLSv1_METHOD)
-		#tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv23_METHOD)
+		#tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.TLSv1_METHOD)
+		tcpsock._sslContext = OpenSSL.SSL.Context(OpenSSL.SSL.SSLv23_METHOD)
 		tcpsock.ssl_errnum = 0
 		tcpsock._sslContext.set_verify(OpenSSL.SSL.VERIFY_PEER, self._ssl_verify_callback)
 		cacerts = os.path.join(gajim.DATA_DIR, 'other', 'cacerts.pem')
