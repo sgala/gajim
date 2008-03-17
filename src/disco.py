@@ -1009,7 +1009,7 @@ class ToplevelAgentBrowser(AgentBrowser):
 	def _text_renderer_data_func(self, col, cell, model, iter):
 		'''Callback for setting the text renderer's properties.'''
 		jid = model.get_value(iter, 0)
-		markup = model.get_value(iter, 3)
+		markup = "&amp;".join(model.get_value(iter, 3).split('&')) #error if channel contains "&" (entity escaping)
 		state = model.get_value(iter, 4)
 		cell.set_property('markup', markup)
 		if jid:
