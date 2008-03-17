@@ -2272,7 +2272,7 @@ class Interface:
 			gajim.config.set_per('accounts', account, 'ignore_ssl_errors', '')
 			gajim.connections[account].ssl_certificate_accepted()
 		def on_no():
-			gajim.connections[account].disconnect(on_purpose=True)
+			gajim.connections[account].connection.disconnect()
 			self.handle_event_status(account, 'offline')
 		pritext = _('SSL certificate error')
 		sectext = _('It seems the SSL certificate has changed or your connection '
@@ -2292,7 +2292,7 @@ class Interface:
 					'warn_when_insecure_connection', False)
 			gajim.connections[account].connection_accepted(data[0], 'tcp')
 		def on_no():
-			gajim.connections[account].disconnect(on_purpose=True)
+			gajim.connections[account].connection.disconnect()
 			self.handle_event_status(account, 'offline')
 		pritext = _('Insecure connection')
 		sectext = _('You are about to send your password on an insecure '

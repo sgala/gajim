@@ -1398,14 +1398,6 @@ class RosterWindow:
 			contact.jid in gajim.interface.status_sent_to_users[account]:
 			del gajim.interface.status_sent_to_users[account][contact.jid]
 
-		if not contact.groups:
-			self.draw_group(_('General'), account)
-		else:
-			for group in contact.groups:
-				self.draw_group(group, account)
-
-		self.draw_account(account)
-
 	def on_info(self, widget, contact, account):
 		'''Call vcard_information_window class to display contact's information'''
 		if gajim.connections[account].is_zeroconf:
