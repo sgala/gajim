@@ -548,8 +548,12 @@ class Connection(ConnectionHandlers):
 					secur = None
 			log.info('Connecting to %s: [%s:%d]', self.name,
 				self._current_host['host'], port)
-			con.connect((self._current_host['host'], port), proxy=self._proxy,
-				secure = secur)
+			if 'ai' in self._current_host:
+				con.connect(self._current_host['ai'], proxy = self._proxy,
+					secure = secur)
+			else:
+				con.connect((self._current_host['host'], port), proxy=self._proxy,
+					secure = secur)
 		else:
 			self.connect_to_next_host(retry)
 
