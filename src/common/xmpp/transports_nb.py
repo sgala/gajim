@@ -1,6 +1,6 @@
 ##   transports_nb.py
 ##       based on transports.py
-##  
+## 
 ##   Copyright (C) 2003-2004 Alexey "Snake" Nezhdanov
 ##       modified by Dimitur Kirov <dkirov@gmail.com>
 ##
@@ -20,7 +20,7 @@ from simplexml import ustr
 from client import PlugIn
 from idlequeue import IdleObject
 from protocol import *
-from transports import * 
+from transports import *
 
 import sys
 import os
@@ -51,7 +51,7 @@ except ImportError:
 	print >> sys.stderr, "PyOpenSSL not found, falling back to Python builtin SSL objects (insecure)."
 	print >> sys.stderr, "=" * 79
 
-# timeout to connect to the server socket, it doesn't include auth 
+# timeout to connect to the server socket, it doesn't include auth
 CONNECT_TIMEOUT_SECONDS = 30
 
 # how long to wait for a disconnect to complete
@@ -236,14 +236,14 @@ class NonBlockingTcp(PlugIn, IdleObject):
 	''' This class can be used instead of transports.Tcp in threadless implementations '''
 	def __init__(self, on_connect = None, on_connect_failure = None, server=None, use_srv = True):
 		''' Cache connection point 'server'. 'server' is the tuple of (host, port)
-			absolutely the same as standard tcp socket uses. 
+			absolutely the same as standard tcp socket uses.
 			on_connect - called when we connect to the socket
 			on_connect_failure  - called if there was error connecting to socket
 			'''
 		IdleObject.__init__(self)
 		PlugIn.__init__(self)
 		self.DBG_LINE='socket'
-		self._exported_methods=[self.send, self.disconnect, self.onreceive, self.set_send_timeout, 
+		self._exported_methods=[self.send, self.disconnect, self.onreceive, self.set_send_timeout,
 			self.start_disconnect, self.set_timeout, self.remove_timeout]
 		self._server = server
 		self.on_connect  = on_connect
@@ -258,7 +258,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		# -2 - disconnected
 		self.state = 0
 		
-		# queue with messages to be send 
+		# queue with messages to be send
 		self.sendqueue = []
 		
 		# bytes remained from the last send message
@@ -281,7 +281,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 			Called internally. '''
 		self.idlequeue = owner.idlequeue
 		self.printed_error = False
-		if not self._server: 
+		if not self._server:
 			self._server=(self._owner.Server,5222)
 		if self.connect(self._server) is False:
 			return False
@@ -301,7 +301,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		''' Try to establish connection. Returns True/False on success/failure. '''
 		if not server:
 			server=self._server
-		else: 
+		else:
 			self._server = server
 		self.printed_error = False
 		self.state = 0
@@ -358,7 +358,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		self._owner = None
 	
 	def pollin(self):
-		self._do_receive() 
+		self._do_receive()
 	
 	def pollend(self, retry=False):
 		if not self.printed_error:
@@ -375,7 +375,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 			return
 		self.state = -2
 		self.sendqueue = None
-		self.remove_timeout() 
+		self.remove_timeout()
 		try:
 			self._owner.disconnected()
 		except:
@@ -442,7 +442,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		received = None
 		errnum = 0
 		errtxt = 'No Error Set'
-		try: 
+		try:
 			# get as many bites, as possible, but not more than RECV_BUFSIZE
 			received = self._recv(RECV_BUFSIZE)
 		except (socket.error, socket.herror, socket.gaierror), e:
@@ -522,7 +522,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 						self._on_send()
 						self.disconnect()
 						return
-					# we are not waiting for write 
+					# we are not waiting for write
 					self._plug_idle()
 				self._on_send()
 		except socket.error, e:
@@ -550,7 +550,7 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		except socket.error, e:
 			errnum = e[0]
 
-			# Ignore "Socket already connected". 
+			# Ignore "Socket already connected".
 			# FIXME: This happens when we switch an already
 			# connected socket to SSL (STARTTLS). Instead of
 			# ignoring the error, the socket should only be
@@ -562,11 +562,11 @@ class NonBlockingTcp(PlugIn, IdleObject):
 				log.error("_do_connect:", exc_info=True)
 				#traceback.print_exc()
 		# in progress, or would block
-		if errnum in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK): 
+		if errnum in (errno.EINPROGRESS, errno.EALREADY, errno.EWOULDBLOCK):
 			return
 		# 10056  - already connected, only on win32
 		# code 'WS*' is not available on GNU, so we use its numeric value
-		elif errnum not in (0, 10056, errno.EISCONN): 
+		elif errnum not in (0, 10056, errno.EISCONN):
 			self.remove_timeout()
 			if self.on_connect_failure:
 				self.on_connect_failure()
@@ -583,15 +583,15 @@ class NonBlockingTcp(PlugIn, IdleObject):
 		return True
 
 	def send(self, raw_data, now = False):
-		'''Append raw_data to the queue of messages to be send. 
+		'''Append raw_data to the queue of messages to be send.
 		If supplied data is unicode string, encode it to utf-8.
 		'''
 		if self.state <= 0:
 			return
 		r = raw_data
-		if isinstance(r, unicode): 
+		if isinstance(r, unicode):
 			r = r.encode('utf-8')
-		elif not isinstance(r, str): 
+		elif not isinstance(r, str):
 			r = ustr(r).encode('utf-8')
 		if now:
 			self.sendqueue.insert(0, r)
@@ -647,10 +647,10 @@ class NonBlockingTLS(PlugIn):
 	''' TLS connection used to encrypts already estabilished tcp connection.'''
 
 	# from ssl.h (partial extract)
-	ssl_h_bits = {	"SSL_ST_CONNECT": 0x1000, "SSL_ST_ACCEPT": 0x2000, 
-			"SSL_CB_LOOP": 0x01, "SSL_CB_EXIT": 0x02, 
-			"SSL_CB_READ": 0x04, "SSL_CB_WRITE": 0x08, 
-			"SSL_CB_ALERT": 0x4000, 
+	ssl_h_bits = {	"SSL_ST_CONNECT": 0x1000, "SSL_ST_ACCEPT": 0x2000,
+			"SSL_CB_LOOP": 0x01, "SSL_CB_EXIT": 0x02,
+			"SSL_CB_READ": 0x04, "SSL_CB_WRITE": 0x08,
+			"SSL_CB_ALERT": 0x4000,
 			"SSL_CB_HANDSHAKE_START": 0x10, "SSL_CB_HANDSHAKE_DONE": 0x20}
 
 	def PlugIn(self, owner, now=0, on_tls_start = None):
@@ -658,7 +658,7 @@ class NonBlockingTLS(PlugIn):
 			If 'now' in false then starts encryption as soon as TLS feature is
 			declared by the server (if it were already declared - it is ok).
 		'''
-		if owner.__dict__.has_key('NonBlockingTLS'): 
+		if owner.__dict__.has_key('NonBlockingTLS'):
 			return  # Already enabled.
 		PlugIn.PlugIn(self, owner)
 		DBG_LINE='NonBlockingTLS'
@@ -674,11 +674,11 @@ class NonBlockingTLS(PlugIn):
 			self.tls_start()
 			return res
 		if self._owner.Dispatcher.Stream.features:
-			try: 
+			try:
 				self.FeaturesHandler(self._owner.Dispatcher, self._owner.Dispatcher.Stream.features)
-			except NodeProcessed: 
+			except NodeProcessed:
 				pass
-		else: 
+		else:
 			self._owner.RegisterHandlerOnce('features',self.FeaturesHandler, xmlns=NS_STREAMS)
 		self.starttls = None
 		
@@ -830,7 +830,7 @@ class NonBlockingTLS(PlugIn):
 	def StartTLSHandler(self, conn, starttls):
 		''' Handle server reply if TLS is allowed to process. Behaves accordingly.
 			Used internally.'''
-		if starttls.getNamespace() <> NS_TLS: 
+		if starttls.getNamespace() <> NS_TLS:
 			return
 		self.starttls = starttls.getName()
 		if self.starttls == 'failure':
@@ -852,7 +852,7 @@ class NBHTTPPROXYsocket(NonBlockingTcp):
 	''' This class can be used instead of transports.HTTPPROXYsocket
 	HTTP (CONNECT) proxy connection class. Uses TCPsocket as the base class
 		redefines only connect method. Allows to use HTTP proxies like squid with
-		(optionally) simple authentication (using login and password). 
+		(optionally) simple authentication (using login and password).
 		
 	'''
 	def __init__(self, on_connect =None, on_proxy_failure=None, on_connect_failure = None,proxy = None,server = None,use_srv=True):
@@ -860,7 +860,7 @@ class NBHTTPPROXYsocket(NonBlockingTcp):
 			'proxy' argument is a dictionary with mandatory keys 'host' and 'port' (proxy address)
 			and optional keys 'user' and 'password' to use for authentication.
 			'server' argument is a tuple of host and port - just like TCPsocket uses. '''
-		self.on_connect_proxy = on_connect  
+		self.on_connect_proxy = on_connect 
 		self.on_proxy_failure = on_proxy_failure
 		self.on_connect_failure = on_connect_failure
 		NonBlockingTcp.__init__(self, self._on_tcp_connect, on_connect_failure, server, use_srv)
@@ -898,9 +898,9 @@ class NBHTTPPROXYsocket(NonBlockingTcp):
 		if reply is None:
 			return
 		self.reply = reply.replace('\r', '')
-		try: 
+		try:
 			proto, code, desc = reply.split('\n')[0].split(' ', 2)
-		except: 
+		except:
 			log.error("_on_headers_sent:", exc_info=True)
 			#traceback.print_exc()
 			self.on_proxy_failure('Invalid proxy reply')
@@ -934,7 +934,7 @@ class NBHTTPPROXYsocket(NonBlockingTcp):
 class NBSOCKS5PROXYsocket(NonBlockingTcp):
 	'''SOCKS5 proxy connection class. Uses TCPsocket as the base class
 		redefines only connect method. Allows to use SOCKS5 proxies with
-		(optionally) simple authentication (only USERNAME/PASSWORD auth). 
+		(optionally) simple authentication (only USERNAME/PASSWORD auth).
 	'''
 	def __init__(self, on_connect = None, on_proxy_failure = None,
 	on_connect_failure = None, proxy = None, server = None, use_srv = True):
@@ -943,7 +943,7 @@ class NBSOCKS5PROXYsocket(NonBlockingTcp):
 			(proxy address) and optional keys 'user' and 'password' to use for
 			authentication. 'server' argument is a tuple of host and port -
 			just like TCPsocket uses. '''
-		self.on_connect_proxy = on_connect  
+		self.on_connect_proxy = on_connect 
 		self.on_proxy_failure = on_proxy_failure
 		self.on_connect_failure = on_connect_failure
 		NonBlockingTcp.__init__(self, self._on_tcp_connect, on_connect_failure,
