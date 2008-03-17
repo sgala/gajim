@@ -2443,7 +2443,7 @@ class Interface:
 
 		links = r"(www\.(?!\.)|[a-z][a-z0-9+.-]*://)[^\s<>'\"]+[^!,\.\s<>\)'\"\]]"
 		#2nd one: at_least_one_char@at_least_one_char.at_least_one_char
-		mail = r'\bmailto:\S*[^\s\W]|' r'\b\S+@\S+\.\S*[^\s\W]'
+		mail = r'\bmailto:\S*[^\s\W]|' r'\s[^@~=\(]\S+@\S+\.\S*[^\s\W](?!\))'
 
 		#detects eg. *b* *bold* *bold bold* test *bold* *bold*! (*bold*)
 		#doesn't detect (it's a feature :P) * bold* *bold * * bold * test*bold*
