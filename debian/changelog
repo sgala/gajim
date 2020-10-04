@@ -66,7 +66,7 @@ gajim (0.10.1-6) unstable; urgency=low
 
 gajim (0.10.1-5) unstable; urgency=low
 
-  * Add dependance on python2.4. Closes: #379662
+  * Add dependence on python2.4. Closes: #379662
 
  -- Yann Le Boulanger <asterix@lagaule.org>  Mon, 19 Jul 2006 21:30:08 +0200
 
