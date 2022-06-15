@@ -587,7 +587,7 @@ class ChatControlBase(MessageControl):
 			self.conv_textview.clear() # clear conversation
 			self.clear(self.msg_textview) # clear message textview too
 			return True
-		elif message == 'compact' and not len(message_array):
+		elif command == 'compact' and not len(message_array):
 			self.chat_buttons_set_visible(not self.hide_chat_buttons)
 			self.clear(self.msg_textview)
 			return True
