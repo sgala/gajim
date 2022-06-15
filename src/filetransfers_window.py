@@ -416,7 +416,7 @@ _('Connection with peer cannot be established.'))
 		''' add extra spaces from both sides of the percent, so that
 		progress string has always a fixed size'''
 		_str = '          '
-		if percent != 100.:
+		if percent < 100.:
 			_str += ' '
 		if percent < 10:
 			_str += ' '
